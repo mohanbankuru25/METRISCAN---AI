@@ -1,0 +1,72 @@
+# =========================
+# Python / FastAPI
+# =========================
+
+backend/venv/
+backend/.venv/
+backend/env/
+
+__pycache__/
+*.py[cod]
+*.pyo
+
+# =========================
+# Environment / Secrets
+# =========================
+
+.env
+*.env
+backend/.env
+
+# =========================
+# Python testing
+# =========================
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Node.js
+# =========================
+
+frontend/node_modules/
+frontend/dist/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Uploads / generated files
+# =========================
+
+backend/uploads/*
+uploads/*
+
+# =========================
+# IDE
+# =========================
+
+.vscode/
+.idea/
+
+# =========================
+# OS
+# =========================
+
+.DS_Store
+Thumbs.db
+# Python virtual environment
+backend/venv/
+venv/
+.venv/
+
+backend/venv/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+
+.git-backup/
