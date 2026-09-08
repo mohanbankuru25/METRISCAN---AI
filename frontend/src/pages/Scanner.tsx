@@ -10,7 +10,7 @@ import { ProductInformation } from "../components/product/ProductInformation";
 import { ComplianceSummary } from "../components/compliance/ComplianceSummary";
 import { EvidenceViewer } from "../components/compliance/EvidenceViewer";
 import { RuleList } from "../components/compliance/RuleList";
-import { processOCR } from "../services/api";
+import { processOCR } from "../services/metriscanApi";
 import { historyService } from "../services/historyService";
 import type { OCRComplianceResponse, ComplianceRuleResult } from "../types/compliance";
 import type { ProductData } from "../types/ocr";
