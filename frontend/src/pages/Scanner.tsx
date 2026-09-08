@@ -206,7 +206,8 @@ export function Scanner() {
             {/* Two column grid: Evidence Viewer + Extracted Information */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "1.5rem" }}>
               <EvidenceViewer
-                imageUrl={scanResult.processed_image ? `http://127.0.0.1:8000/${scanResult.processed_image}` : previewUrl}
+                imageUrl={previewUrl || (scanResult.processed_image ? `http://127.0.0.1:8000/${scanResult.processed_image.replace(/\\/g, "/")}` : "")}
+                fallbackUrl={scanResult.processed_image ? `http://127.0.0.1:8000/${scanResult.processed_image.replace(/\\/g, "/")}` : undefined}
                 ocrDetails={scanResult.ocr_details}
                 selectedRule={selectedRule}
               />

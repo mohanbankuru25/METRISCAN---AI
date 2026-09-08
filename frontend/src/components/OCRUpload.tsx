@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { processOCR } from "../services/api";
+import { processOCR } from "../services/metriscanApi";
 import type { OCRResponse, ProductData } from "../services/api";
 
 type ProcessingStep = {

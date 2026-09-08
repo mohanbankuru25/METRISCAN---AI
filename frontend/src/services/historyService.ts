@@ -11,10 +11,31 @@ const SAMPLE_SCANS: ScanHistoryItem[] = [
     category: "Packaged Food",
     score: 95.0,
     status: "PASS",
-    filename: "amul_butter.jpg",
+    filename: "camera_capture_1788763585954.jpg",
+    previewUrl: "http://localhost:8000/uploads/camera_capture_1788763585954.jpg",
     fullData: {
-      filename: "amul_butter.jpg",
-      text: ["Amul Pasteurised Butter", "Net Qty: 500g", "MRP Rs 275.00 incl. of all taxes", "Mfg Date: 15/08/2026", "Best Before 12 Months from Packaging", "FSSAI Lic No 10012021000071", "Packed by: Kaira District Co-operative Milk Producers Union Ltd, Anand 388001"],
+      filename: "camera_capture_1788763585954.jpg",
+      processed_image: "uploads/camera_capture_1788763585954.jpg",
+      text: [
+        "Amul Pasteurised Butter",
+        "Net Qty: 500g",
+        "MRP Rs 275.00 incl. of all taxes",
+        "Mfg Date: 15/08/2026",
+        "Best Before 12 Months from Packaging",
+        "FSSAI Lic No 10012021000071",
+        "Packed by: Kaira District Co-operative Milk Producers Union Ltd, Anand 388001",
+        "1800 258 3333 / customercare@amul.coop"
+      ],
+      ocr_details: [
+        { text: "Amul Pasteurised Butter", confidence: 0.99, bbox: [120, 80, 850, 180] },
+        { text: "Net Qty: 500g", confidence: 0.97, bbox: [140, 220, 420, 280] },
+        { text: "MRP Rs 275.00 incl. of all taxes", confidence: 0.98, bbox: [140, 310, 720, 370] },
+        { text: "Mfg Date: 15/08/2026", confidence: 0.95, bbox: [140, 400, 520, 450] },
+        { text: "Best Before 12 Months from Packaging", confidence: 0.94, bbox: [140, 480, 780, 530] },
+        { text: "FSSAI Lic No 10012021000071", confidence: 0.96, bbox: [140, 560, 680, 610] },
+        { text: "Packed by: Kaira District Co-operative Milk Producers Union Ltd, Anand 388001", confidence: 0.93, bbox: [140, 640, 1050, 700] },
+        { text: "1800 258 3333 / customercare@amul.coop", confidence: 0.96, bbox: [140, 730, 890, 780] }
+      ],
       product_data: {
         product_name: "Amul Pasteurised Butter",
         product_category: "Packaged Food",
@@ -57,10 +78,26 @@ const SAMPLE_SCANS: ScanHistoryItem[] = [
     category: "Packaged Food",
     score: 71.4,
     status: "REVIEW",
-    filename: "quaker_oats.jpg",
+    filename: "oats.jpeg",
+    previewUrl: "http://localhost:8000/uploads/oats.jpeg",
     fullData: {
-      filename: "quaker_oats.jpg",
-      text: ["Quaker Rolled Oats", "Net Wt 1000g", "MRP ₹199", "Customer Care: care@pepsico.com"],
+      filename: "oats.jpeg",
+      processed_image: "uploads/oats.jpeg",
+      text: [
+        "Quaker Rolled Oats",
+        "Net Wt 1000g",
+        "MRP ₹199",
+        "Customer Care: care@pepsico.com",
+        "PepsiCo India Holdings Pvt Ltd",
+        "100% Natural Wholegrain Oats"
+      ],
+      ocr_details: [
+        { text: "Quaker Rolled Oats", confidence: 0.98, bbox: [220, 160, 880, 270] },
+        { text: "Net Wt 1000g", confidence: 0.96, bbox: [240, 310, 560, 370] },
+        { text: "MRP ₹199", confidence: 0.97, bbox: [240, 410, 510, 470] },
+        { text: "PepsiCo India Holdings Pvt Ltd", confidence: 0.94, bbox: [200, 540, 850, 600] },
+        { text: "Customer Care: care@pepsico.com", confidence: 0.93, bbox: [200, 660, 860, 715] }
+      ],
       product_data: {
         product_name: "Quaker Rolled Oats",
         product_category: "Packaged Food",
@@ -88,6 +125,7 @@ const SAMPLE_SCANS: ScanHistoryItem[] = [
         results: [
           { rule_id: "RULE_6_1_A", rule_number: "Rule 6(1)(a)", rule_name: "Generic Name", status: "PASS", applicable: true, expected: "Generic name declared", extracted: "Quaker Rolled Oats", reason: "Generic name identified.", rule_reference: "Rule 6(1)(a)" },
           { rule_id: "RULE_6_1_B", rule_number: "Rule 6(1)(b)", rule_name: "Net Quantity", status: "PASS", applicable: true, expected: "Net weight in g/kg", extracted: "1000 g", reason: "Declared correctly.", rule_reference: "Rule 6(1)(b)" },
+          { rule_id: "RULE_6_1_C", rule_number: "Rule 6(1)(c)", rule_name: "MRP Declaration", status: "PASS", applicable: true, expected: "MRP declared in Rupees", extracted: "₹199", reason: "MRP declaration present.", rule_reference: "Rule 6(1)(c)" },
           { rule_id: "RULE_6_1_D", rule_number: "Rule 6(1)(d)", rule_name: "Date of Manufacture", status: "REVIEW", applicable: true, expected: "Month and Year required", extracted: "Not detected", reason: "Manufacturing date text low contrast or unverified.", suggestion: "Verify label manually for MFD statement.", rule_reference: "Rule 6(1)(d)" },
           { rule_id: "RULE_6_1_F", rule_number: "Rule 6(1)(f)", rule_name: "Consumer Contact Phone", status: "REVIEW", applicable: true, expected: "Telephone number required", extracted: "care@pepsico.com (Email only)", reason: "Telephone number missing from consumer contact declaration.", suggestion: "Ensure toll-free/phone number is printed.", rule_reference: "Rule 6(1)(f)" }
         ]
@@ -97,41 +135,50 @@ const SAMPLE_SCANS: ScanHistoryItem[] = [
   {
     id: "scan_sample_3",
     timestamp: new Date(Date.now() - 3600000 * 42).toISOString(),
-    productName: "Nivea Soft Cream 100ml",
-    category: "Cosmetics",
-    score: 45.0,
-    status: "FAIL",
-    filename: "nivea_cream.jpg",
+    productName: "Yippee Noodles 280g",
+    category: "Packaged Food",
+    score: 82.0,
+    status: "PASS",
+    filename: "yippee.jpg",
+    previewUrl: "http://localhost:8000/uploads/yippee.jpg",
     fullData: {
-      filename: "nivea_cream.jpg",
-      text: ["Nivea Moisturiser", "100ml"],
+      filename: "yippee.jpg",
+      processed_image: "uploads/yippee.jpg",
+      text: ["Sunfeast Yippee! Mood Masala", "Net Qty: 280g", "MRP ₹50.00", "ITC Limited, Kolkata"],
+      ocr_details: [
+        { text: "Sunfeast Yippee! Mood Masala", confidence: 0.98, bbox: [150, 120, 820, 240] },
+        { text: "Net Qty: 280g", confidence: 0.95, bbox: [180, 280, 480, 350] },
+        { text: "MRP ₹50.00", confidence: 0.97, bbox: [180, 390, 460, 450] },
+        { text: "ITC Limited, Kolkata", confidence: 0.94, bbox: [180, 520, 720, 580] }
+      ],
       product_data: {
-        product_name: "Nivea Moisturiser",
-        product_category: "Cosmetics",
-        net_quantity: "100 ml",
-        mrp: null,
-        batch_number: null,
-        date_of_manufacture: null,
-        packed_on: null,
-        best_before: null,
+        product_name: "Sunfeast Yippee! Mood Masala",
+        product_category: "Packaged Food",
+        net_quantity: "280 g",
+        mrp: "₹50.00",
+        batch_number: "B2609",
+        date_of_manufacture: "01/08/2026",
+        packed_on: "01/08/2026",
+        best_before: "9 Months",
         use_by: null,
         expiry_date: null,
-        manufacturer_or_packer: null,
-        address: null,
-        consumer_contact: null,
-        license_number: null,
-        ingredients: null,
-        country_of_origin: null,
-        marketed_by: null
+        manufacturer_or_packer: "ITC Limited",
+        address: "37 J.L. Nehru Road, Kolkata 700071",
+        consumer_contact: "1800 425 4444 / itccares@itc.in",
+        license_number: "10012031000012",
+        ingredients: "Wheat Flour, Edible Vegetable Oil, Spices and Condiments",
+        country_of_origin: "India",
+        marketed_by: "ITC Limited"
       },
       compliance: {
-        overall_status: "FAIL",
-        compliance_score: 45.0,
-        score: 45.0,
-        summary: { PASS: 4, FAIL: 5, REVIEW: 3, "NOT APPLICABLE": 5, "OUT OF SCOPE": 3 },
+        overall_status: "PASS",
+        compliance_score: 82.0,
+        score: 82.0,
+        summary: { PASS: 12, FAIL: 0, REVIEW: 2, "NOT APPLICABLE": 3, "OUT OF SCOPE": 2 },
         results: [
-          { rule_id: "RULE_6_1_C", rule_number: "Rule 6(1)(c)", rule_name: "MRP Declaration", status: "FAIL", applicable: true, expected: "Mandatory MRP declaration in ₹", extracted: "Not detected", reason: "MRP is missing from package outer declaration.", suggestion: "MRP is mandatory under Rule 6(1)(c).", rule_reference: "Rule 6(1)(c)" },
-          { rule_id: "RULE_6_1_E", rule_number: "Rule 6(1)(e)", rule_name: "Manufacturer Address", status: "FAIL", applicable: true, expected: "Full address required", extracted: "Not detected", reason: "Manufacturer address missing.", suggestion: "Add registered address of packer/manufacturer.", rule_reference: "Rule 6(1)(e)" }
+          { rule_id: "RULE_6_1_A", rule_number: "Rule 6(1)(a)", rule_name: "Generic Name", status: "PASS", applicable: true, expected: "Generic name declared", extracted: "Sunfeast Yippee! Mood Masala", reason: "Generic name identified.", rule_reference: "Rule 6(1)(a)" },
+          { rule_id: "RULE_6_1_B", rule_number: "Rule 6(1)(b)", rule_name: "Net Quantity", status: "PASS", applicable: true, expected: "Net weight in g/kg", extracted: "280 g", reason: "Declared correctly.", rule_reference: "Rule 6(1)(b)" },
+          { rule_id: "RULE_6_1_C", rule_number: "Rule 6(1)(c)", rule_name: "MRP Declaration", status: "PASS", applicable: true, expected: "MRP declared in ₹", extracted: "₹50.00", reason: "MRP declaration present.", rule_reference: "Rule 6(1)(c)" }
         ]
       }
     }
@@ -146,7 +193,16 @@ export const historyService = {
         localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(SAMPLE_SCANS));
         return SAMPLE_SCANS;
       }
-      return JSON.parse(stored);
+      const parsed: ScanHistoryItem[] = JSON.parse(stored);
+      // If sample scan lacks ocr_details or previewUrl, refresh sample items
+      const updated = parsed.map((item) => {
+        const sampleMatch = SAMPLE_SCANS.find((s) => s.id === item.id);
+        if (sampleMatch && (!item.fullData?.ocr_details?.length || !item.previewUrl)) {
+          return sampleMatch;
+        }
+        return item;
+      });
+      return updated;
     } catch {
       return SAMPLE_SCANS;
     }

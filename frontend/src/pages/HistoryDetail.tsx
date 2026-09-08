@@ -47,9 +47,11 @@ export function HistoryDetail() {
   const productData = fullData.product_data || fullData.paddle_data || fullData.gemini_data || null;
   const compliance = fullData.compliance || null;
   const rules = Array.isArray(compliance?.results) ? compliance.results : [];
-  const imageUrl = fullData.processed_image
-    ? `http://127.0.0.1:8000/${fullData.processed_image}`
-    : scan.previewUrl || "https://placehold.co/600x400?text=Product+Package";
+  const processedUrl = fullData.processed_image
+    ? `http://127.0.0.1:8000/${fullData.processed_image.replace(/\\/g, "/")}`
+    : undefined;
+
+  const imageUrl = scan.previewUrl || processedUrl || "https://placehold.co/600x400?text=Product+Package";
 
   const handlePrint = () => {
     window.print();
@@ -149,6 +151,7 @@ export function HistoryDetail() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "1.5rem" }}>
           <EvidenceViewer
             imageUrl={imageUrl}
+            fallbackUrl={processedUrl}
             ocrDetails={fullData.ocr_details}
             selectedRule={selectedRule}
           />
