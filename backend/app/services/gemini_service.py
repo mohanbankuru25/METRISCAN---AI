@@ -262,8 +262,8 @@ REJECT:
 - any long natural-language sentence
 
 Example:
-B.NO.: TV230923
-=> batch_number = "TV230923"
+B.NO.: BATCH1029
+=> batch_number = "BATCH1029"
 
 If the package says:
 "BATCH NO. SEE BOTTOM OF CAN"
@@ -307,9 +307,9 @@ Look specifically for:
 - Use Before
 
 If:
-USE BY: 22 SEP 24
+USE BY: 15 OCT 25
 return:
-use_by = "22 SEP 24"
+use_by = "15 OCT 25"
 
 Do not rename USE BY as Best Before.
 
@@ -353,9 +353,9 @@ Strong labels:
 
 Example:
 MANUFACTURED BY:
-ITC LIMITED - FOODS DIVISION
+SAMPLE CONSUMER PRODUCTS PVT LTD
 SURVEY NO. 15/1...
-=> manufacturer_or_packer = "ITC LIMITED - FOODS DIVISION"
+=> manufacturer_or_packer = "SAMPLE CONSUMER PRODUCTS PVT LTD"
 
 Do NOT return the address as manufacturer_or_packer.
 

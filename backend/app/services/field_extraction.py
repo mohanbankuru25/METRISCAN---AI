@@ -402,76 +402,61 @@ class FieldExtractor:
     }
 
     @classmethod
-    def is_batch(
-        cls,
-        text: str
-    ) -> bool:
-
+    def is_batch(cls, text: str, explicit_label: bool = False) -> bool:
+        """Validate a compact batch/lot identifier."""
         if not text:
             return False
-
         value = text.strip()
         lower = value.lower()
 
-        for field_word in cls.FIELD_WORDS:
-
-            if lower == field_word:
-                return False
-
-            if lower.startswith(
-                field_word + ":"
-            ):
-                return False
-
-        if "http" in lower:
-            return False
-
-        if "www." in lower:
-            return False
-
-        if "@" in value:
-            return False
-
-        if "₹" in value:
-            return False
-
-        if "/-" in value:
-            return False
-
-        if cls.is_date(value):
-            return False
-
-        if re.fullmatch(
-            r"\d{1,2}:\d{2}(?:-\d{1,2})?",
-            value
-        ):
-            return False
-
-        compact = re.sub(
-            r"[\s:./-]",
-            "",
-            value
+        rejected = (
+            "net weight", "net quantity", "quantity", "mrp",
+            "maximum retail price", "packed on", "packed date",
+            "best before", "use by", "expiry", "mfd", "mfg",
+            "date of manufacture", "manufactured by", "packed by",
+            "marketed by", "license", "lic no", "fssai", "consumer",
+            "address",
         )
+        if any(x in lower for x in rejected):
+            return False
+        if "http" in lower or "www." in lower or "@" in value:
+            return False
+        if "₹" in value or "/-" in value or cls.is_date(value):
+            return False
+        if len(value.split()) > 3 or len(value) > 30:
+            return False
 
+        compact = re.sub(r"[\s:./_-]", "", value)
         if len(compact) < 3:
             return False
+        if re.fullmatch(r"\d+", compact):
+            if not explicit_label:
+                return False
+            # Allow numeric batch/lot identifiers when directly associated
+            # with a Batch/Lot label, while rejecting common phone/PIN forms.
+            if len(compact) == 6:
+                return False
+            if len(compact) == 10 and compact[0] in "6789":
+                return False
+            return 4 <= len(compact) <= 15
+        return bool(re.fullmatch(r"[A-Za-z0-9]+", compact))
 
-        if len(compact) > 30:
-            return False
-
-        # Reject barcode-like values.
-        if re.fullmatch(
-            r"\d{10,14}",
-            compact
-        ):
-            return False
-
-        return bool(
-            re.fullmatch(
-                r"[A-Za-z0-9]+",
-                compact
-            )
+    @classmethod
+    def extract_batch_from_labeled_text(cls, text: str) -> Optional[str]:
+        """Extract only the value immediately associated with a batch/lot label."""
+        if not text:
+            return None
+        pattern = re.compile(
+            r"(?:batch\s*(?:no\.?|number)?|b\.\s*no\.?|"
+            r"lot\s*(?:no\.?|number)?)"
+            r"\s*[:#=\-]?\s*([A-Za-z0-9][A-Za-z0-9 ./_-]{1,29})",
+            re.IGNORECASE,
         )
+        match = pattern.search(text.strip())
+        if not match:
+            return None
+        value = cls.clean_value(match.group(1))
+        return value if cls.is_batch(value, explicit_label=True) else None
 
     # =========================================================
     # MANUFACTURER VALIDATION
@@ -554,27 +539,7 @@ class FieldExtractor:
             return self.extract_date(text)
 
         if field == "batch_number":
-
-            labels = self.LABELS[field]
-
-            for label in labels:
-
-                pattern = re.compile(
-                    re.escape(label)
-                    + r"\s*[:\-]?\s*(.+)$",
-                    re.IGNORECASE
-                )
-
-                match = pattern.search(text)
-
-                if match:
-
-                    value = self.clean_value(
-                        match.group(1)
-                    )
-
-                    if self.is_batch(value):
-                        return value
+            return self.extract_batch_from_labeled_text(text)
 
         if field == "license_number":
 
@@ -642,7 +607,9 @@ class FieldExtractor:
 
             elif field == "batch_number":
 
-                if self.is_batch(text):
+                # OCR order fallback is only safe for compact candidates.
+                # Prefer explicit Batch/Lot-labelled values elsewhere.
+                if self.is_batch(text, explicit_label=True):
                     return self.clean_value(text)
 
             elif field == "license_number":
@@ -798,7 +765,9 @@ class FieldExtractor:
 
             elif field == "batch_number":
 
-                if self.is_batch(text):
+                # OCR order fallback is only safe for compact candidates.
+                # Prefer explicit Batch/Lot-labelled values elsewhere.
+                if self.is_batch(text, explicit_label=True):
                     return self.clean_value(text)
 
             elif field == "manufacturer_or_packer":
@@ -1729,6 +1698,8 @@ class FieldExtractor:
             "packed_on": packed_on,
             "date_of_manufacture": date_of_manufacture,
             "best_before": best_before,
+            "use_by": None,
+            "expiry_date": None,
             "manufacturer_or_packer": manufacturer_or_packer,
             "address": address,
             "consumer_contact": consumer_contact,

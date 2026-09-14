@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Play, RotateCcw, FileText, Image as ImageIcon } from "lucide-react";
+import { ProcessingPipeline } from "./ProcessingPipeline";
 
 interface ScanPreviewProps {
   file: File;
@@ -7,6 +8,8 @@ interface ScanPreviewProps {
   onStartScan: () => void;
   onReset: () => void;
   loading: boolean;
+  isComplete?: boolean;
+  isCached?: boolean;
 }
 
 export function ScanPreview({
@@ -15,6 +18,8 @@ export function ScanPreview({
   onStartScan,
   onReset,
   loading,
+  isComplete = false,
+  isCached = false,
 }: ScanPreviewProps) {
   const [dimensions, setDimensions] = useState<string>("");
 
@@ -45,7 +50,7 @@ export function ScanPreview({
         </button>
       </div>
 
-      {/* Image container */}
+      {/* Image container with transparent AI scanning overlay */}
       <div
         style={{
           width: "100%",
@@ -57,7 +62,8 @@ export function ScanPreview({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "0.5rem"
+          padding: "0.5rem",
+          position: "relative",
         }}
       >
         <img
@@ -65,6 +71,11 @@ export function ScanPreview({
           alt="Package preview"
           style={{ width: "100%", height: "100%", maxHeight: "430px", objectFit: "contain" }}
         />
+
+        {/* Transparent AI / Computer-Vision scanning overlay */}
+        {loading && (
+          <ProcessingPipeline isComplete={isComplete} isCached={isCached} />
+        )}
       </div>
 
       {/* File info bar */}

@@ -1,0 +1,626 @@
+import io
+import os
+from datetime import datetime, date
+from typing import Any, Dict, List, Optional
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
+from reportlab.platypus import (
+    HRFlowable,
+    KeepTogether,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+# ==============================================================================
+# UNICODE FONT REGISTRATION FOR INDIAN LANGUAGES (Hindi, Marathi, Telugu, etc.)
+# ==============================================================================
+
+_FONTS_REGISTERED = False
+REGULAR_FONT = "Helvetica"
+BOLD_FONT = "Helvetica-Bold"
+
+def _ensure_fonts_registered():
+    global _FONTS_REGISTERED, REGULAR_FONT, BOLD_FONT
+    if _FONTS_REGISTERED:
+        return
+
+    nirmala_path = "C:\\Windows\\Fonts\\Nirmala.ttc"
+    if os.path.exists(nirmala_path):
+        try:
+            pdfmetrics.registerFont(TTFont("Nirmala", nirmala_path, subfontIndex=0))
+            pdfmetrics.registerFont(TTFont("NirmalaBold", nirmala_path, subfontIndex=1))
+            REGULAR_FONT = "Nirmala"
+            BOLD_FONT = "NirmalaBold"
+            _FONTS_REGISTERED = True
+            return
+        except Exception as e:
+            print(f"Notice: Nirmala TTC registration fallback: {e}")
+
+    # Fallback to standard Noto Sans or Arial
+    arial_path = "C:\\Windows\\Fonts\\arial.ttf"
+    arial_bold = "C:\\Windows\\Fonts\\arialbd.ttf"
+    if os.path.exists(arial_path):
+        try:
+            pdfmetrics.registerFont(TTFont("ArialUni", arial_path))
+            if os.path.exists(arial_bold):
+                pdfmetrics.registerFont(TTFont("ArialUniBold", arial_bold))
+                BOLD_FONT = "ArialUniBold"
+            else:
+                BOLD_FONT = "ArialUni"
+            REGULAR_FONT = "ArialUni"
+            _FONTS_REGISTERED = True
+            return
+        except Exception:
+            pass
+
+    _FONTS_REGISTERED = True
+
+
+# ==============================================================================
+# LOCALIZED DICTIONARIES FOR REPORT
+# ==============================================================================
+
+REPORT_TRANSLATIONS = {
+    "en": {
+        "title": "CONSUMER PRODUCT INFORMATION REPORT",
+        "subtitle": "MetriScan Consumer Product Safety & Information Service",
+        "product_overview": "PRODUCT OVERVIEW",
+        "product_name": "Product Name",
+        "category": "Category",
+        "quantity": "Net Quantity",
+        "mrp": "MRP",
+        "batch": "Batch / Lot No.",
+        "date_shelf_life": "DATE & SHELF LIFE VERIFICATION",
+        "mfg_date": "Manufacturing / Packed Date",
+        "expiry_date": "Expiry / Best Before",
+        "shelf_status": "Shelf-Life Status",
+        "safe_status": "SAFE / WITHIN SHELF LIFE",
+        "expired_status": "⚠ EXPIRED — DO NOT CONSUME",
+        "undetermined_status": "Expiry status could not be determined from the scanned label.",
+        "expired_alert": "PRODUCT EXPIRED: Do not consume this product. Please check the package and consider contacting the manufacturer or seller.",
+        "ingredients": "INGREDIENTS",
+        "ingredients_declared_pct": "Declared ingredient percentages as printed on package:",
+        "ingredients_not_declared": "Ingredient percentages were not explicitly declared on the scanned package.",
+        "no_ingredients": "No ingredient information could be reliably extracted from the scanned package.",
+        "nutrition": "NUTRITION INFORMATION",
+        "per_100g": "Per 100 g / per serving",
+        "nutrient": "Nutrient Parameter",
+        "quantity_declared": "Declared Value",
+        "no_nutrition": "No nutritional information could be reliably extracted from the scanned package.",
+        "nutrition_note_title": "Consumer Nutritional Note",
+        "allergens": "ALLERGEN NOTIFICATIONS",
+        "contains": "Contains:",
+        "no_allergens": "No major common food allergens explicitly declared on this label panel.",
+        "who_should_check": "WHO MAY WANT TO CHECK THE LABEL CAREFULLY?",
+        "no_age_restriction": "No specific age restriction was detected on the scanned label.",
+        "advisory": "CONSUMER ADVISORY",
+        "good_to_know": "GOOD TO KNOW",
+        "manufacturer_info": "MANUFACTURER & CONSUMER CARE",
+        "manufacturer": "Manufacturer / Packer",
+        "marketed_by": "Marketed By",
+        "license": "License Number",
+        "consumer_contact": "Consumer Care Contact",
+        "scanned_on": "Scanned On",
+        "scan_id": "Scan Reference ID",
+        "disclaimer": "DISCLAIMER: This report is generated by METRIScan strictly for consumer awareness, product transparency, and package reading assistance. It does not constitute medical diagnosis, healthcare advice, or a legal enforcement determination.",
+        "footer": "MetriScan Consumer Product Information Report | For Public Consumer Awareness",
+    },
+    "hi": {
+        "title": "उपभोक्ता उत्पाद सूचना रिपोर्ट",
+        "subtitle": "मैट्रिस्कैन उपभोक्ता उत्पाद सुरक्षा एवं सूचना सेवा",
+        "product_overview": "उत्पाद अवलोकन",
+        "product_name": "उत्पाद का नाम",
+        "category": "श्रेणी",
+        "quantity": "शुद्ध मात्रा (Net Quantity)",
+        "mrp": "अधिकतम खुदरा मूल्य (MRP)",
+        "batch": "बैच / लॉट संख्या",
+        "date_shelf_life": "तिथि एवं शेल्फ लाइफ सत्यापन",
+        "mfg_date": "निर्माण / पैकिंग तिथि",
+        "expiry_date": "समाप्ति / उपयोग की अंतिम तिथि",
+        "shelf_status": "शेल्फ लाइफ स्थिति",
+        "safe_status": "सुरक्षित / शेल्फ लाइफ के भीतर",
+        "expired_status": "⚠ समाप्त (Expired) — उपभोग न करें",
+        "undetermined_status": "स्कैन किए गए लेबल से समाप्ति स्थिति का विश्वसनीय निर्धारण नहीं किया जा सका।",
+        "expired_alert": "उत्पाद समाप्त हो चुका है: इस उत्पाद का उपभोग न करें। कृपया पैकेट की जांच करें और निर्माता या विक्रेता से संपर्क करें।",
+        "ingredients": "सामग्री (INGREDIENTS)",
+        "ingredients_declared_pct": "पैकेट पर मुद्रित घोषित सामग्री का प्रतिशत:",
+        "ingredients_not_declared": "स्कैन किए गए पैकेट पर सामग्री का प्रतिशत स्पष्ट रूप से घोषित नहीं किया गया था।",
+        "no_ingredients": "स्कैन किए गए पैकेट से सामग्री की जानकारी विश्वसनीय रूप से प्राप्त नहीं की जा सकी।",
+        "nutrition": "पोषण संबंधी जानकारी (NUTRITION)",
+        "per_100g": "प्रति 100 ग्राम / प्रति सर्विंग",
+        "nutrient": "पोषक तत्व",
+        "quantity_declared": "घोषित मात्रा",
+        "no_nutrition": "स्कैन किए गए पैकेट से कोई पोषण तालिका प्राप्त नहीं की जा सकी।",
+        "nutrition_note_title": "उपभोक्ता पोषण नोट",
+        "allergens": "एलर्जी संबंधी जानकारी (ALLERGENS)",
+        "contains": "शामिल है:",
+        "no_allergens": "इस लेबल पैनल पर कोई प्रमुख सामान्य खाद्य एलर्जेन स्पष्ट रूप से घोषित नहीं है।",
+        "who_should_check": "किन्हें लेबल की सावधानीपूर्वक जांच करनी चाहिए?",
+        "no_age_restriction": "स्कैन किए गए लेबल पर कोई विशिष्ट आयु प्रतिबंध नहीं पाया गया।",
+        "advisory": "उपभोक्ता सलाह (CONSUMER ADVISORY)",
+        "good_to_know": "जानना अच्छा है (GOOD TO KNOW)",
+        "manufacturer_info": "निर्माता एवं उपभोक्ता सहायता",
+        "manufacturer": "निर्माता / पैकर",
+        "marketed_by": "विपणनकर्ता (Marketed By)",
+        "license": "लाइसेंस संख्या (FSSAI)",
+        "consumer_contact": "उपभोक्ता सहायता संपर्क",
+        "scanned_on": "स्कैन की तिथि",
+        "scan_id": "स्कैन संदर्भ संख्या",
+        "disclaimer": "अस्वीकरण: यह रिपोर्ट केवल उपभोक्ता जागरूकता, उत्पाद पारदर्शिता और पैकेज पढ़ने में सहायता के लिए उत्पन्न की गई है। यह चिकित्सा निदान या कानूनी प्रवर्तन निर्धारण का गठन नहीं करती है।",
+        "footer": "मैट्रिस्कैन उपभोक्ता उत्पाद सूचना रिपोर्ट | सार्वजनिक उपभोक्ता जागरूकता हेतु",
+    },
+    "mr": {
+        "title": "ग्राहक उत्पादन माहिती अहवाल",
+        "subtitle": "मेट्रिस्कॅन ग्राहक उत्पादन सुरक्षितता आणि माहिती सेवा",
+        "product_overview": "उत्पादन विहंगावलोकन",
+        "product_name": "उत्पादनाचे नाव",
+        "category": "श्रेणी",
+        "quantity": "निव्वळ प्रमाण (Net Quantity)",
+        "mrp": "कमाल किरकोळ किंमत (MRP)",
+        "batch": "बॅच / लॉट क्रमांक",
+        "date_shelf_life": "तारीख आणि शेल्फ लाइफ पडताळणी",
+        "mfg_date": "उत्पादन / पॅकिंग तारीख",
+        "expiry_date": "कालबाह्यता / अंतिम वापर तारीख",
+        "shelf_status": "शेल्फ लाइफ स्थिती",
+        "safe_status": "सुरक्षित / शेल्फ लाइफ अंतर्गत",
+        "expired_status": "⚠ कालबाह्य (Expired) — सेवन करू नका",
+        "undetermined_status": "स्कॅन केलेल्या लेबलवरून कालबाह्यता स्थिती निश्चित करता आली नाही.",
+        "expired_alert": "उत्पादन कालबाह्य झाले आहे: या उत्पादनाचे सेवन करू नका. कृपया पॅकेज तपासा आणि उत्पादकाशी संपर्क साधा.",
+        "ingredients": "घटक (INGREDIENTS)",
+        "ingredients_declared_pct": "पॅकेटवर छापलेली घटकांची घोषित टक्केवारी:",
+        "ingredients_not_declared": "स्कॅन केलेल्या पॅकेटवर घटकांची टक्केवारी स्पष्टपणे घोषित केलेली नाही.",
+        "no_ingredients": "स्कॅन केलेल्या पॅकेटवरून घटकांची माहिती मिळवता आली नाही.",
+        "nutrition": "पोषण माहिती (NUTRITION)",
+        "per_100g": "प्रति १०० ग्रॅम / प्रति सर्व्हिंग",
+        "nutrient": "पोषक घटक",
+        "quantity_declared": "घोषित प्रमाण",
+        "no_nutrition": "स्कॅन केलेल्या पॅकेटवर पोषण तक्ता आढळला नाही.",
+        "nutrition_note_title": "ग्राहक पोषण नोंद",
+        "allergens": "ऍलर्जी माहिती (ALLERGENS)",
+        "contains": "समाविष्ट घटक:",
+        "no_allergens": "या लेबलवर कोणतेही प्रमुख सामान्य अन्न ऍलर्जन्स घोषित केलेले नाहीत.",
+        "who_should_check": "कोणी लेबल काळजीपूर्वक तपासावे?",
+        "no_age_restriction": "स्कॅन केलेल्या लेबलवर कोणतेही वयोमर्यादा निर्बंध आढळले नाहीत.",
+        "advisory": "ग्राहक सल्ला (CONSUMER ADVISORY)",
+        "good_to_know": "माहित असणे आवश्यक",
+        "manufacturer_info": "उत्पादक आणि ग्राहक सेवा संपर्क",
+        "manufacturer": "उत्पादक / पॅकर",
+        "marketed_by": "विपणनकर्ता (Marketed By)",
+        "license": "परवाना क्रमांक (FSSAI)",
+        "consumer_contact": "ग्राहक सेवा संपर्क",
+        "scanned_on": "स्कॅन तारीख",
+        "scan_id": "स्कॅन संदर्भ क्रमांक",
+        "disclaimer": "अस्वीकरण: हा अहवाल केवळ ग्राहक जागृती, उत्पादन पारदर्शकता आणि लेबल वाचनाच्या मदतीसाठी तयार केला आहे. हे वैद्यकीय निदान किंवा कायदेशीर अंमलबजावणी नाही.",
+        "footer": "मेट्रिस्कॅन ग्राहक उत्पादन माहिती अहवाल | सार्वजनिक ग्राहक जागृतीसाठी",
+    },
+    "te": {
+        "title": "వినియోగదారు ఉత్పత్తి సమాచార నివేదిక",
+        "subtitle": "మెట్రిస్కాన్ వినియోగదారు ఉత్పత్తి భద్రత & సమాచార సేవ",
+        "product_overview": "ఉత్పత్తి అవలోకనం",
+        "product_name": "ఉత్పత్తి పేరు",
+        "category": "వర్గం",
+        "quantity": "నికర పరిమాణం (Net Quantity)",
+        "mrp": "గరిష్ట రిటైల్ ధర (MRP)",
+        "batch": "బ్యాచ్ / లాట్ సంఖ్య",
+        "date_shelf_life": "తేదీ & షెల్ఫ్ లైఫ్ ధృవీకరణ",
+        "mfg_date": "తయారీ / ప్యాకింగ్ తేదీ",
+        "expiry_date": "గడువు / ఉత్తమ వినియోగ తేదీ",
+        "shelf_status": "షెల్ఫ్ లైఫ్ స్థితి",
+        "safe_status": "సురక్షితం / షెల్ఫ్ లైఫ్ లోపల ఉంది",
+        "expired_status": "⚠ గడువు ముగిసింది — ఉపయోగించవద్దు",
+        "undetermined_status": "స్కాన్ చేసిన లేబుల్ నుండి గడువు స్థితిని స్పష్టంగా నిర్ధారించలేకపోయాము.",
+        "expired_alert": "ఉత్పత్తి గడువు ముగిసింది: ఈ ఉత్పత్తిని ఉపయోగించవద్దు. దయచేసి ప్యాకేజీని పరిశీలించి, తయారీదారును సంప్రదించండి.",
+        "ingredients": "పదార్థాలు (INGREDIENTS)",
+        "ingredients_declared_pct": "ప్యాకేజీపై ప్రకటించిన పదార్థాల శాతం:",
+        "ingredients_not_declared": "స్కాన్ చేసిన ప్యాకేజీపై పదార్థాల శాతాలు స్పష్టంగా ప్రకటించబడలేదు.",
+        "no_ingredients": "స్కాన్ చేసిన ప్యాకేజీ నుండి పదార్థాల వివరాలను సేకరించలేకపోయాము.",
+        "nutrition": "పోషకాహార సమాచారం (NUTRITION)",
+        "per_100g": "ప్రతి 100 గ్రాములకు / సర్వింగ్‌కు",
+        "nutrient": "పోషక పరామితి",
+        "quantity_declared": "ప్రకటించిన పరిమాణం",
+        "no_nutrition": "స్కాన్ చేసిన ప్యాకేజీపై పోషకాహార పట్టిక కనుగొనబడలేదు.",
+        "nutrition_note_title": "వినియోగదారు పోషక గమనిక",
+        "allergens": "అలెర్జీ సమాచారం (ALLERGENS)",
+        "contains": "కలిగి ఉన్నవి:",
+        "no_allergens": "ఈ లేబుల్ ప్యానెల్‌పై ఎటువంటి ప్రధాన ఆహార అలెర్జీ కారకాలు ప్రకటించబడలేదు.",
+        "who_should_check": "ఎవరు లేబుల్‌ను జాగ్రత్తగా పరిశీలించాలి?",
+        "no_age_restriction": "స్కాన్ చేసిన లేబుల్‌పై ఎటువంటి నిర్దిష్ట వయస్సు పరిమితులు లేవు.",
+        "advisory": "వినియోగదారు సలహా (CONSUMER ADVISORY)",
+        "good_to_know": "తెలుసుకోవలసిన సమాచారం",
+        "manufacturer_info": "తయారీదారు & కస్టమర్ కేర్",
+        "manufacturer": "తయారీదారు / ప్యాకర్",
+        "marketed_by": "మార్కెటింగ్ చేసినవారు",
+        "license": "లైసెన్స్ సంఖ్య (FSSAI)",
+        "consumer_contact": "కస్టమర్ కేర్ సంప్రదింపు",
+        "scanned_on": "స్కాన్ చేసిన తేదీ",
+        "scan_id": "స్కాన్ రిఫరెన్స్ సంఖ్య",
+        "disclaimer": "నిరాకరణ: ఈ నివేదిక వినియోగదారు అవగాహన మరియు ఉత్పత్తి పారదర్శకత కోసం మాత్రమే రూపొందించబడింది. ఇది వైద్య నిర్ధారణ లేదా చట్టపరమైన తీర్పు కాదు.",
+        "footer": "మెట్రిస్కాన్ వినియోగదారు ఉత్పత్తి సమాచార నివేదిక | ప్రజా వినియోగదారు అవగాహన కోసం",
+    },
+}
+
+
+# ==============================================================================
+# NUMBERED CANVAS WITH CLEAN CONSUMER FOOTER
+# ==============================================================================
+
+class ConsumerReportCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+        self.lang = "en"
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        _ensure_fonts_registered()
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_footer(num_pages)
+            super().showPage()
+        super().save()
+
+    def draw_footer(self, page_count):
+        self.saveState()
+        self.setFont(REGULAR_FONT, 8)
+        self.setFillColor(colors.HexColor("#64748b"))
+
+        # Footer divider line
+        self.setStrokeColor(colors.HexColor("#cbd5e1"))
+        self.setLineWidth(0.75)
+        self.line(36, 42, 559, 42)
+
+        t_dict = REPORT_TRANSLATIONS.get(self.lang, REPORT_TRANSLATIONS["en"])
+        footer_text = t_dict.get("footer", "")
+        self.drawString(36, 30, footer_text)
+        self.drawRightString(559, 30, f"Page {self._pageNumber} of {page_count}")
+        self.restoreState()
+
+
+# ==============================================================================
+# MAIN CONSUMER REPORT GENERATION FUNCTION
+# ==============================================================================
+
+def generate_consumer_report_pdf(scan_data: Dict[str, Any], language: str = "en") -> bytes:
+    """
+    Generates a high-quality consumer product information report in PDF format.
+    Guarantees:
+    - Multi-language support (English, Hindi, Marathi, Telugu) using Unicode fonts.
+    - Zero enforcement terminology (No 'NON-COMPLIANT', No scores, No LM-01 rule IDs).
+    - Strict shelf life determination and prominent expired warning if expired.
+    - Isolated data from current scan only.
+    """
+    _ensure_fonts_registered()
+    lang = language.lower() if language and language.lower() in REPORT_TRANSLATIONS else "en"
+    t_dict = REPORT_TRANSLATIONS[lang]
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=54,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReportTitle",
+        parent=styles["Normal"],
+        fontName=BOLD_FONT,
+        fontSize=17,
+        leading=21,
+        textColor=colors.HexColor("#0f172a"),
+        alignment=TA_LEFT,
+    )
+    subtitle_style = ParagraphStyle(
+        "ReportSubtitle",
+        parent=styles["Normal"],
+        fontName=REGULAR_FONT,
+        fontSize=9.5,
+        leading=13,
+        textColor=colors.HexColor("#059669"),
+        alignment=TA_LEFT,
+    )
+    section_head_style = ParagraphStyle(
+        "SectionHead",
+        parent=styles["Normal"],
+        fontName=BOLD_FONT,
+        fontSize=11,
+        leading=14,
+        textColor=colors.HexColor("#065f46"),
+        spaceAfter=4,
+    )
+    body_style = ParagraphStyle(
+        "BodyStyle",
+        parent=styles["Normal"],
+        fontName=REGULAR_FONT,
+        fontSize=8.5,
+        leading=12,
+        textColor=colors.HexColor("#1e293b"),
+    )
+    bold_style = ParagraphStyle(
+        "BoldStyle",
+        parent=styles["Normal"],
+        fontName=BOLD_FONT,
+        fontSize=8.5,
+        leading=12,
+        textColor=colors.HexColor("#0f172a"),
+    )
+    warning_bold_style = ParagraphStyle(
+        "WarningBoldStyle",
+        parent=styles["Normal"],
+        fontName=BOLD_FONT,
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#b91c1c"),
+    )
+    safe_bold_style = ParagraphStyle(
+        "SafeBoldStyle",
+        parent=styles["Normal"],
+        fontName=BOLD_FONT,
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#047857"),
+    )
+    disclaimer_style = ParagraphStyle(
+        "DisclaimerStyle",
+        parent=styles["Normal"],
+        fontName=REGULAR_FONT,
+        fontSize=7.5,
+        leading=10.5,
+        textColor=colors.HexColor("#64748b"),
+    )
+
+    story = []
+
+    # 1. Header Banner
+    header_data = [
+        [
+            Paragraph(t_dict["title"], title_style),
+            Paragraph(f"<b>{t_dict['scanned_on']}:</b> {datetime.now().strftime('%d-%b-%Y')}", ParagraphStyle("MetaR", parent=body_style, alignment=TA_RIGHT)),
+        ],
+        [
+            Paragraph(t_dict["subtitle"], subtitle_style),
+            Paragraph(f"<b>{t_dict['scan_id']}:</b> {str(scan_data.get('id', ''))[:13]}...", ParagraphStyle("MetaR2", parent=body_style, alignment=TA_RIGHT)),
+        ]
+    ]
+    t_header = Table(header_data, colWidths=[360, 163])
+    t_header.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+    ]))
+    story.append(t_header)
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#059669"), spaceBefore=2, spaceAfter=10))
+
+    # 2. Critical Expiry Alert Banner (if product is expired)
+    is_expired = scan_data.get("is_expired") or scan_data.get("expiry_status") == "EXPIRED"
+    if is_expired:
+        banner_content = [
+            [
+                Paragraph(f"<b>{t_dict['expired_status']}</b>", ParagraphStyle("ExpH", parent=title_style, textColor=colors.HexColor("#991b1b"), fontSize=12, leading=15)),
+            ],
+            [
+                Paragraph(t_dict["expired_alert"], ParagraphStyle("ExpB", parent=body_style, textColor=colors.HexColor("#7f1d1d"))),
+            ]
+        ]
+        t_exp = Table(banner_content, colWidths=[523])
+        t_exp.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fee2e2")),
+            ("BOX", (0, 0), (-1, -1), 1.5, colors.HexColor("#ef4444")),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        story.append(t_exp)
+        story.append(Spacer(1, 10))
+
+    # 3. Product Overview & Date / Shelf-Life Section
+    story.append(Paragraph(t_dict["product_overview"], section_head_style))
+    pname = scan_data.get("product_name") or t_dict.get("not_detected", "Not detected")
+    mrp = scan_data.get("mrp") or "Not detected"
+    qty = scan_data.get("net_quantity") or "Not detected"
+    batch = scan_data.get("batch_number") or "Not detected"
+    mfg = scan_data.get("manufacturing_date") or scan_data.get("packed_on") or "Not detected"
+    exp = scan_data.get("expiry_date") or scan_data.get("best_before") or "Not detected"
+    
+    # Shelf status text
+    if is_expired:
+        shelf_txt = Paragraph(f"<b>{t_dict['expired_status']}</b>", warning_bold_style)
+    elif scan_data.get("expiry_status") == "VALID":
+        shelf_txt = Paragraph(f"<b>{t_dict['safe_status']}</b>", safe_bold_style)
+    else:
+        shelf_txt = Paragraph(t_dict["undetermined_status"], body_style)
+
+    overview_table_data = [
+        [
+            Paragraph(f"<b>{t_dict['product_name']}:</b>", bold_style),
+            Paragraph(pname, body_style),
+            Paragraph(f"<b>{t_dict['mfg_date']}:</b>", bold_style),
+            Paragraph(mfg, body_style),
+        ],
+        [
+            Paragraph(f"<b>{t_dict['mrp']}:</b>", bold_style),
+            Paragraph(mrp, body_style),
+            Paragraph(f"<b>{t_dict['expiry_date']}:</b>", bold_style),
+            Paragraph(exp, body_style),
+        ],
+        [
+            Paragraph(f"<b>{t_dict['quantity']}:</b>", bold_style),
+            Paragraph(qty, body_style),
+            Paragraph(f"<b>{t_dict['shelf_status']}:</b>", bold_style),
+            shelf_txt,
+        ],
+        [
+            Paragraph(f"<b>{t_dict['batch']}:</b>", bold_style),
+            Paragraph(batch, body_style),
+            Paragraph(f"<b>{t_dict['license']}:</b>", bold_style),
+            Paragraph(scan_data.get("fssai_license") or "Not detected", body_style),
+        ],
+    ]
+    t_overview = Table(overview_table_data, colWidths=[110, 150, 110, 153])
+    t_overview.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#cbd5e1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.append(t_overview)
+    story.append(Spacer(1, 12))
+
+    # 4. Ingredients Section
+    story.append(Paragraph(t_dict["ingredients"], section_head_style))
+    ingredients = scan_data.get("ingredients") or []
+    has_pct = any(i.get("percentage") for i in ingredients if isinstance(i, dict))
+    
+    if ingredients and isinstance(ingredients, list):
+        if has_pct:
+            story.append(Paragraph(t_dict["ingredients_declared_pct"], body_style))
+        else:
+            story.append(Paragraph(t_dict["ingredients_not_declared"], body_style))
+        story.append(Spacer(1, 4))
+
+        ing_rows = []
+        # Render in 2 columns
+        for idx, item in enumerate(ingredients):
+            iname = item.get("name", "") if isinstance(item, dict) else str(item)
+            ipct = item.get("percentage") if isinstance(item, dict) else None
+            txt = f"• <b>{iname}</b>" + (f" — {ipct}" if ipct else "")
+            ing_rows.append(Paragraph(txt, body_style))
+
+        # Split into paired rows
+        pair_data = []
+        for i in range(0, len(ing_rows), 2):
+            col1 = ing_rows[i]
+            col2 = ing_rows[i + 1] if i + 1 < len(ing_rows) else Paragraph("", body_style)
+            pair_data.append([col1, col2])
+
+        t_ing = Table(pair_data, colWidths=[261, 262])
+        t_ing.setStyle(TableStyle([
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        story.append(t_ing)
+    else:
+        story.append(Paragraph(t_dict["no_ingredients"], body_style))
+
+    story.append(Spacer(1, 12))
+
+    # 5. Nutrition Facts Table
+    story.append(Paragraph(t_dict["nutrition"] + f" ({t_dict['per_100g']})", section_head_style))
+    nutrition_data = scan_data.get("nutrition_data") or {}
+
+    if nutrition_data and isinstance(nutrition_data, dict):
+        nutri_table_data = [
+            [
+                Paragraph(f"<b>{t_dict['nutrient']}</b>", bold_style),
+                Paragraph(f"<b>{t_dict['quantity_declared']}</b>", bold_style),
+            ]
+        ]
+        for k, v in nutrition_data.items():
+            param_name = str(k).replace("_", " ").title()
+            nutri_table_data.append([
+                Paragraph(param_name, body_style),
+                Paragraph(str(v), body_style),
+            ])
+
+        t_nutri = Table(nutri_table_data, colWidths=[280, 243])
+        t_nutri.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+            ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#cbd5e1")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(t_nutri)
+    else:
+        story.append(Paragraph(t_dict["no_nutrition"], body_style))
+
+    story.append(Spacer(1, 12))
+
+    # 6. Allergen Notifications & Suitability Guidance
+    story.append(Paragraph(t_dict["allergens"], section_head_style))
+    allergens = scan_data.get("allergens") or []
+    if allergens:
+        allergen_str = ", ".join(allergens)
+        story.append(Paragraph(f"<b>{t_dict['contains']}</b> {allergen_str}", warning_bold_style))
+    else:
+        story.append(Paragraph(t_dict["no_allergens"], body_style))
+
+    story.append(Spacer(1, 10))
+
+    # 7. Who should check the label carefully & Consumer Advisory
+    story.append(Paragraph(t_dict["who_should_check"], section_head_style))
+    recs = scan_data.get("recommendations") or []
+    if recs and isinstance(recs, list):
+        for rec in recs:
+            if isinstance(rec, dict):
+                category = rec.get("category", "")
+                text = rec.get("text", "")
+                story.append(Paragraph(f"• <b>{category}:</b> {text}", body_style))
+                story.append(Spacer(1, 2))
+    else:
+        story.append(Paragraph(t_dict["no_age_restriction"], body_style))
+
+    story.append(Spacer(1, 10))
+
+    # 8. Manufacturer & Redressal Information
+    story.append(Paragraph(t_dict["manufacturer_info"], section_head_style))
+    mfg_name = scan_data.get("manufacturer") or "Declared on primary package face"
+    consumer_care = scan_data.get("consumer_contact") or "Refer to package details"
+    mfg_table = [
+        [Paragraph(f"<b>{t_dict['manufacturer']}:</b>", bold_style), Paragraph(mfg_name, body_style)],
+        [Paragraph(f"<b>{t_dict['consumer_contact']}:</b>", bold_style), Paragraph(consumer_care, body_style)],
+    ]
+    t_mfg = Table(mfg_table, colWidths=[140, 383])
+    t_mfg.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#cbd5e1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(t_mfg)
+    story.append(Spacer(1, 14))
+
+    # 9. Disclaimer
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceBefore=2, spaceAfter=6))
+    story.append(Paragraph(t_dict["disclaimer"], disclaimer_style))
+
+    # Custom canvas with footer
+    def _canvas_factory(*args, **kwargs):
+        c = ConsumerReportCanvas(*args, **kwargs)
+        c.lang = lang
+        return c
+
+    doc.build(story, canvasmaker=_canvas_factory)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes

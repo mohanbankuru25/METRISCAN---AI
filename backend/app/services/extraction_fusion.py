@@ -145,6 +145,42 @@ class ExtractionFusion:
         },
     }
 
+
+    # Explicit label phrases have higher evidentiary priority than a
+    # free-standing value returned by a model. These are used to prevent
+    # cross-field contamination during fusion.
+    STRONG_FIELD_LABELS = {
+        "batch_number": (
+            "batch number", "batch no", "batch no.", "batch", "b.no",
+            "b.no.", "b no", "lot number", "lot no"
+        ),
+        "net_quantity": (
+            "net quantity", "net qty", "net weight", "n.qty", "quantity"
+        ),
+        "mrp": (
+            "mrp", "m.r.p", "mrp rs", "maximum retail price"
+        ),
+        "packed_on": (
+            "packed on", "packed date", "pkd on", "date packed"
+        ),
+        "date_of_manufacture": (
+            "date of manufacture", "manufactured on",
+            "manufacturing date", "mfd", "mfg"
+        ),
+        "best_before": ("best before", "best before date", "bbe"),
+        "use_by": ("use by", "use before"),
+        "expiry_date": ("expiry", "expiry date", "exp", "exp date", "expires"),
+        "manufacturer_or_packer": (
+            "manufactured by", "manufactured and packed by",
+            "manufactured & packed by", "packed by", "packer",
+            "manufacturer", "manufactured for"
+        ),
+        "marketed_by": (
+            "marketed by", "marketed and distributed by",
+            "marketed & distributed by", "distributed by"
+        ),
+    }
+
     GENERIC_REJECT_PHRASES = {
         "see below",
         "see bottom",
@@ -334,19 +370,32 @@ class ExtractionFusion:
                 return g
 
         if field == "batch_number":
+            # Batch is a high-risk cross-field contamination point. When
+            # PaddleOCR has a valid explicitly-labelled batch value, prefer
+            # it over an unassociated Gemini guess.
             p_valid = self._valid_batch(p)
             g_valid = self._valid_batch(g)
 
+            p_explicit = self._has_explicit_label(p, "batch_number")
+            g_explicit = self._has_explicit_label(g, "batch_number")
+
+            if p_valid and p_explicit:
+                return self._extract_batch_value(p)
+
+            if g_valid and g_explicit:
+                return self._extract_batch_value(g)
+
             if p_valid and not g_valid:
-                return p
+                return self._extract_batch_value(p)
 
             if g_valid and not p_valid:
-                return g
+                return self._extract_batch_value(g)
 
             if p_valid and g_valid:
-                # Gemini gets preference when both are valid but
-                # the values conflict because it has visual context.
-                return g
+                # If neither source contains the label, do not let Gemini
+                # arbitrarily replace OCR. Prefer the shorter/cleaner
+                # candidate and let recovery use the original OCR evidence.
+                return self._prefer_batch_candidate(p, g)
 
             return None
 
@@ -422,9 +471,12 @@ class ExtractionFusion:
             )
 
         if field == "country_of_origin":
-            # Gemini is useful for visual association, but the prompt
-            # now requires explicit country-of-origin wording.
-            return g
+            # Country of origin must have explicit association. Never allow
+            # an address or a bare country name inferred from the image to
+            # silently become the declaration.
+            if g and self._has_explicit_label(g, "country_of_origin"):
+                return g
+            return None
 
         # Default:
         # Gemini wins when both are plausible because it has access
@@ -892,12 +944,11 @@ class ExtractionFusion:
         )
 
         # Batch must never be another field label/instruction.
-        result["batch_number"] = (
-            self._validate_candidate(
-                "batch_number",
-                result.get("batch_number")
-            )
+        batch_candidate = self._validate_candidate(
+            "batch_number",
+            result.get("batch_number")
         )
+        result["batch_number"] = self._extract_batch_value(batch_candidate)
 
         # Manufacturer/packer must be a company/person, not an address.
         result["manufacturer_or_packer"] = (
@@ -963,6 +1014,168 @@ class ExtractionFusion:
 
         return result
 
+    def _has_explicit_label(
+        self,
+        value: Optional[str],
+        field: str
+    ) -> bool:
+        """Return True when a value visibly contains its field label."""
+        if not value:
+            return False
+
+        normalized = self._norm(value)
+
+        labels = self.STRONG_FIELD_LABELS.get(field, ())
+        return any(
+            self._norm(label) in normalized
+            for label in labels
+        )
+
+    def _extract_batch_value(
+        self,
+        value: Optional[str]
+    ) -> Optional[str]:
+        """Extract only the value portion from a labelled batch string."""
+        if not value:
+            return None
+
+        text = value.strip()
+
+        labels = sorted(
+            self.STRONG_FIELD_LABELS["batch_number"],
+            key=len,
+            reverse=True
+        )
+
+        for label in labels:
+            pattern = re.compile(
+                r"^\s*" + re.escape(label) +
+                r"\s*(?:[:#=\-]\s*)?(.+?)\s*$",
+                re.IGNORECASE
+            )
+            match = pattern.match(text)
+
+            if match:
+                candidate = match.group(1).strip()
+                if self._valid_batch_value_only(candidate):
+                    return candidate
+                return None
+
+        if self._valid_batch_value_only(text):
+            return text
+
+        return None
+
+    def _valid_batch_value_only(
+        self,
+        value: Optional[str]
+    ) -> bool:
+        """Validate a batch value after its label has been removed."""
+        if not value:
+            return False
+
+        text = value.strip()
+        normalized = self._norm(text)
+
+        if not normalized:
+            return False
+
+        if self._looks_like_instruction(text):
+            return False
+
+        if self._looks_like_address(text):
+            return False
+
+        if self._is_mrp_label_only(text):
+            return False
+
+        if re.search(
+            r"\b(?:net\s+(?:weight|quantity)|quantity)\b",
+            normalized,
+            re.I
+        ):
+            return False
+
+        if re.search(
+            r"\b(?:packed\s+on|best\s+before|use\s+by|expiry|"
+            r"mfd|mfg|date\s+of\s+manufacture|mrp)\b",
+            normalized,
+            re.I
+        ):
+            return False
+
+        if self._valid_date_candidate(text):
+            return False
+
+        if "@" in text or "http" in normalized or "www." in normalized:
+            return False
+
+        if "₹" in text or "/-" in text:
+            return False
+
+        # A bare numeric batch can be valid when explicitly labelled, but
+        # reject typical phone-number and barcode lengths.
+        compact = re.sub(r"[\s:./-]", "", text)
+
+        if len(compact) < 3 or len(compact) > 30:
+            return False
+
+        if re.fullmatch(r"\d+", compact):
+            # Numeric batch codes are valid when they came through the
+            # explicit Batch/Lot-labelled extraction path. Reject only
+            # common PIN/mobile shapes.
+            if len(compact) == 6:
+                return False
+            if len(compact) == 10 and compact[0] in "6789":
+                return False
+            return 4 <= len(compact) <= 15
+
+        return bool(re.fullmatch(r"[A-Za-z0-9]+", compact))
+
+    def _prefer_batch_candidate(
+        self,
+        first: str,
+        second: str
+    ) -> str:
+        """Choose a conservative batch candidate when both are plausible."""
+        first_clean = self._extract_batch_value(first)
+        second_clean = self._extract_batch_value(second)
+
+        if first_clean and not second_clean:
+            return first_clean
+
+        if second_clean and not first_clean:
+            return second_clean
+
+        if first_clean and second_clean:
+            # If one candidate is purely numeric, prefer it when it has the
+            # shape of a batch identifier. This prevents words such as
+            # "Sugar" from replacing an explicitly labelled code.
+            first_digits = re.sub(r"\D", "", first_clean)
+            second_digits = re.sub(r"\D", "", second_clean)
+            if first_clean.isdigit() and not second_clean.isdigit():
+                return first_clean
+            if second_clean.isdigit() and not first_clean.isdigit():
+                return second_clean
+
+            # Prefer a compact identifier over a long natural-language value.
+            first_words = len(first_clean.split())
+            second_words = len(second_clean.split())
+
+            if first_words < second_words:
+                return first_clean
+
+            if second_words < first_words:
+                return second_clean
+
+            return (
+                first_clean
+                if len(first_clean) <= len(second_clean)
+                else second_clean
+            )
+
+        return first
+
     def _valid_batch(
         self,
         value: Optional[str]
@@ -996,30 +1209,27 @@ class ExtractionFusion:
         if len(words) > 6:
             return False
 
-        if re.fullmatch(
-            r"[\d\W_]+",
-            text,
-        ):
-            # A batch may be numeric, but reject obvious long date/phone
-            # patterns as batch candidates.
-            if re.fullmatch(
-                r"\d{7,15}",
-                re.sub(r"\D", "", text),
-            ):
-                return False
-
         if re.search(
-            r"\b(use by|packed on|mfd|mfg|mrp|net quantity|best before|expiry)\b",
+            r"\b(net\s+(?:weight|quantity)|quantity|packed\s+on|"
+            r"best\s+before|use\s+by|mfd|mfg|mrp|expiry|"
+            r"manufactured\s+by|packed\s+by|marketed\s+by)\b",
             normalized,
+            re.I,
         ):
             return False
 
-        return bool(
-            re.search(
-                r"[A-Za-z0-9]",
-                text,
-            )
-        )
+        if re.fullmatch(r"[\d\W_]+", text):
+            # Structured field values have already come from the Batch/Lot
+            # extraction path. Permit legitimate numeric identifiers here,
+            # but reject common PIN/mobile-number forms.
+            compact = re.sub(r"\D", "", text)
+            if len(compact) == 6:
+                return False
+            if len(compact) == 10 and compact[0] in "6789":
+                return False
+            return 4 <= len(compact) <= 15
+
+        return bool(re.search(r"[A-Za-z0-9]", text))
 
     def _valid_mrp(
         self,

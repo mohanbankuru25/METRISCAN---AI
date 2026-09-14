@@ -431,50 +431,78 @@ class OCRFieldRecovery:
         result: Dict[str, Any],
         items: List[Dict[str, Any]],
     ) -> None:
-        if self._has_value(result.get("batch_number")):
-            return
+        """
+        Recover the batch/lot number using explicit label association.
+
+        A previously extracted value is not automatically trusted. If it is
+        clearly contaminated by another declaration, it may be replaced by
+        stronger OCR evidence. Numeric-only batch numbers are allowed when
+        they are explicitly associated with a Batch/Lot label.
+        """
+        current = result.get("batch_number")
 
         labels = self._find_labels(
             items,
             (
-                "batch",
-                "batch no",
                 "batch number",
+                "batch no",
+                "batch",
                 "b.no",
-                "lot no",
+                "b no",
                 "lot number",
+                "lot no",
+                "lot",
             ),
         )
 
+        # Strongest evidence: label and value in the same OCR block.
         for label_item in labels:
-            # Same OCR block.
             same_line = self._extract_after_label(
                 label_item["text"],
                 (
-                    "batch",
-                    "batch no",
                     "batch number",
+                    "batch no",
+                    "batch",
                     "b.no",
-                    "lot",
-                    "lot no",
+                    "b no",
                     "lot number",
+                    "lot no",
+                    "lot",
                 ),
             )
 
-            if same_line and self._valid_batch(same_line):
-                result["batch_number"] = same_line
+            if same_line and self._valid_batch(
+                same_line,
+                explicit_label=True,
+            ):
+                result["batch_number"] = self._clean_batch(same_line)
                 return
 
-            # Nearby OCR block.
-            value = self._best_nearby_text(
+        # If no explicit OCR-labelled batch value was found, only then
+        # preserve a previously extracted candidate. This prevents weak
+        # semantic guesses such as "Sugar" from surviving when the OCR
+        # contains a stronger `Batch: 20250509` declaration.
+        if self._has_value(current) and self._valid_batch(
+            str(current),
+            explicit_label=False,
+        ):
+            return
+
+        # Second choice: label and value split into nearby OCR boxes.
+        for label_item in labels:
+            nearby = self._nearby_items(
                 label_item,
                 items,
-                self._valid_batch,
+                max_vertical=180,
+                max_horizontal=500,
             )
 
-            if value:
-                result["batch_number"] = value
-                return
+            for item in nearby:
+                value = item["text"].strip()
+
+                if self._valid_batch(value, explicit_label=True):
+                    result["batch_number"] = self._clean_batch(value)
+                    return
 
     # ---------------------------------------------------------
     # Dates
@@ -984,7 +1012,19 @@ class OCRFieldRecovery:
     # Validators
     # ---------------------------------------------------------
 
-    def _valid_batch(self, value: str) -> bool:
+    def _valid_batch(
+        self,
+        value: str,
+        explicit_label: bool = False,
+    ) -> bool:
+        """
+        Validate a batch/lot candidate.
+
+        Numeric-only values are normally rejected because they can be phone
+        numbers, PIN codes, prices, or dates. With explicit Batch/Lot
+        evidence, legitimate numeric batch values such as 20250509 are
+        accepted.
+        """
         text = value.strip()
 
         if not text or self._is_bad_value(text):
@@ -993,23 +1033,63 @@ class OCRFieldRecovery:
         if len(text.split()) > 5:
             return False
 
+        normalized = self._norm(text)
+
+        # Reject other declaration fields accidentally captured as batch.
         if re.search(
-            r"\b(use by|packed on|mfd|mfg|mrp|net quantity|best before|expiry)\b",
-            text,
+            r"\b("
+            r"use\s*by|packed\s*on|mfd|mfg|manufactured|"
+            r"mrp|net\s*(?:quantity|qty|weight)|best\s*before|"
+            r"expiry|expires|packed\s*by|marketed\s*by|"
+            r"consumer\s*(?:care|contact|helpline)|"
+            r"license|lic\s*no|address|ingredients"
+            r")\b",
+            normalized,
             re.I,
         ):
             return False
 
-        if re.fullmatch(r"[\d\W_]+", text):
+        if self.EMAIL_RE.search(text):
             return False
 
-        # Avoid accepting phone numbers as batch values.
+        if self._looks_like_address(text):
+            return False
+
         digits = re.sub(r"\D", "", text)
 
-        if re.fullmatch(r"\d{7,15}", digits):
-            return False
+        # Pure numeric batch codes need an explicit Batch/Lot label.
+        if re.fullmatch(r"\d+", text):
+            if not explicit_label:
+                return False
 
-        return bool(re.search(r"[A-Za-z0-9]", text))
+            # Six digits is commonly a PIN. A 10-digit value beginning
+            # with 6-9 is very likely an Indian mobile number.
+            if len(digits) == 6:
+                return False
+
+            if len(digits) == 10 and digits[0] in "6789":
+                return False
+
+            return 4 <= len(digits) <= 15
+
+        # Mixed alpha-numeric codes are common batch/lot formats.
+        if re.search(r"[A-Za-z]", text) and re.search(r"\d", text):
+            return bool(
+                re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9./_-]{1,30}", text)
+            )
+
+        # Short alphabetic lot codes can also be valid.
+        return bool(
+            re.fullmatch(r"[A-Za-z][A-Za-z0-9./_-]{2,30}", text)
+        )
+
+    @staticmethod
+    def _clean_batch(value: str) -> str:
+        """Remove OCR punctuation/label residue from a recovered batch."""
+        text = value.strip()
+        text = re.sub(r"^(?:[:#=\-–—]\s*)", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
 
     def _valid_company(self, value: str) -> bool:
         text = value.strip()

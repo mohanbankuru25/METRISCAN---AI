@@ -45,7 +45,81 @@ export interface ComplianceResult {
   compliance_score?: number;
 }
 
-export interface OCRComplianceResponse extends OCRResponse {
+export interface VisualTextSize {
+  status?: string;
+  text_blocks?: number;
+  median_height?: number;
+  min_height?: number;
+  max_height?: number;
+  median_height_px?: number;
+  min_height_px?: number;
+  max_height_px?: number;
+  calibrated_height_mm?: number | null;
+}
+
+
+export interface VisualPlacement {
+  status?: string;
+  text_blocks?: number;
+  bbox_count?: number;
+  regions?: any[];
+  label_positions?: any[];
+  declaration_groups?: any[];
+}
+
+
+export interface VisualReadability {
+  status?: string;
+  mean_ocr_confidence?: number;
+  high_confidence_ratio?: number;
+  local_contrast?: number;
+  median_local_contrast?: number;
+}
+
+
+export interface DeclarationVisibility {
+  status?: string;
+  detected_declarations?: number;
+  ocr_bbox_count?: number;
+  groups?: any[];
+}
+
+
+export interface VisualComplianceAnalysis {
+  engine?: string;
+
+  image?: {
+    width?: number;
+    height?: number;
+    calibrated?: boolean;
+  };
+
+  text_size?: VisualTextSize;
+
+  placement?: VisualPlacement;
+
+  readability?: VisualReadability;
+
+  declaration_visibility?: DeclarationVisibility;
+
+  rules?: {
+    [key: string]: any;
+  };
+}
+
+
+export interface OCRComplianceResponse
+  extends OCRResponse {
+
   compliance?: ComplianceResult | null;
+
   applicability?: unknown;
+
+  visual_analysis?: VisualComplianceAnalysis;
+
+  processed_image?: string;
+
+  gemini_error?: string | null;
+
+  recovered_fields?: any[];
 }

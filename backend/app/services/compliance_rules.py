@@ -2,14 +2,13 @@ from typing import Any, Dict, List, Optional
 
 
 # ============================================================
-# COLLEGE DEMO LEGAL BASELINE
+# CURRENT CONSOLIDATED LEGAL-METROLOGY RULE MASTER
 # ============================================================
 #
-# This version intentionally uses the ORIGINAL
-# Legal Metrology (Packaged Commodities) Rules, 2011
-# as the baseline.
+# This rule master represents the current
+# Legal Metrology (Packaged Commodities) Rules, 2011 with applicable amendments.
 #
-# Amendments are NOT applied in this college-demo version.
+# Amendments relevant to package-image compliance are reflected below.
 #
 # Later we can introduce:
 #   - amendment registry
@@ -25,7 +24,8 @@ RULE_BASELINE = {
     "notification": "G.S.R. 202(E)",
     "notification_date": "2011-03-07",
     "effective_from": "2011-04-01",
-    "version": "2011-original",
+    "version": "current-consolidated-amendments",
+    "status": "AI compliance baseline; verify current notification and effective date before enforcement use",
 }
 
 
@@ -255,239 +255,70 @@ RULE_MASTER: List[Dict[str, Any]] = [
 
 
     # --------------------------------------------------------
-    # RULE 5
+    # RULE 5 — OMITTED BY 2021 AMENDMENT
     # --------------------------------------------------------
 
     {
         "rule_id": "LM-05",
         "rule_number": "5",
-        "rule_name": (
-            "Specific commodities to be packed and sold "
-            "in recommended standard packages"
-        ),
-
-        "category": "QUANTITY",
-
+        "rule_name": "Omitted",
+        "category": "LEGAL_STATUS",
         "requirement": (
-            "The commodities specified in the Second Schedule "
-            "are to be packed for sale, distribution or delivery "
-            "in the standard quantities specified in that Schedule."
+            "Rule 5 was omitted by the Legal Metrology "
+            "(Packaged Commodities) (Amendment) Rules, 2021. "
+            "The former Second Schedule standard-package-quantity "
+            "requirement must not be applied as a current Rule 5 check."
         ),
-
-        "applicability": (
-            "Only when the product belongs to a commodity "
-            "specified in the Second Schedule."
-        ),
-
-        "automation": {
-            "type": "CONDITIONAL",
-            "ai_checkable": True,
-            "requires_product_category": True,
-            "requires_second_schedule": True,
-        },
-
-        "evidence_needed": [
-            "product_category",
-            "net_quantity",
-            "second_schedule_entry",
-        ],
-
-        "expected": (
-            "The declared package quantity should correspond "
-            "to the applicable standard package quantity."
-        ),
-
-        "possible_status": [
-            "PASS",
-            "FAIL",
-            "REVIEW",
-            "NOT_APPLICABLE",
-        ],
-
+        "applicability": "Not an active compliance requirement.",
+        "automation": {"type": "OUT_OF_SCOPE", "ai_checkable": False},
+        "evidence_needed": [],
+        "expected": "Do not evaluate Rule 5 as an active package declaration requirement.",
+        "possible_status": ["NOT_APPLICABLE", "OUT_OF_SCOPE"],
         "rule_reference": (
-            "Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 5"
+            "Legal Metrology (Packaged Commodities) Rules, 2011 — Rule 5 "
+            "(omitted by 2021 amendment)"
         ),
-
-        "suggestion": (
-            "Determine the commodity category and consult "
-            "the Second Schedule before evaluating."
-        ),
+        "status": "OMITTED",
     },
 
 
     # --------------------------------------------------------
-    # RULE 6
+    # RULE 6 — MANDATORY DECLARATIONS
     # --------------------------------------------------------
 
     {
         "rule_id": "LM-06",
         "rule_number": "6",
         "rule_name": "Declarations to be made on every package",
-
         "category": "MANDATORY_DECLARATIONS",
-
         "requirement": (
-            "Every package shall bear a definite, plain and "
-            "conspicuous declaration in accordance with the Rules."
+            "Every package shall bear the declarations prescribed by "
+            "Rule 6, subject to the applicable sub-rule, commodity, "
+            "food-law and import-related conditions."
         ),
-
-        "applicability": (
-            "Primary declaration rule for pre-packaged commodities."
-        ),
-
+        "applicability": "Primary declaration rule for packages within Chapter II.",
         "automation": {
-            "type": "AUTOMATED",
-            "ai_checkable": True,
-            "requires_ocr": True,
-            "requires_structured_product_data": True,
+            "type": "AUTOMATED", "ai_checkable": True,
+            "requires_ocr": True, "requires_structured_product_data": True,
+            "requires_applicability_engine": True,
         },
-
         "checks": [
-
-            {
-                "check_id": "LM-06-01",
-                "name": "Manufacturer / packer / importer",
-                "field": "manufacturer_or_packer",
-
-                "required": True,
-
-                "automation": "AUTOMATED",
-
-                "expected": (
-                    "Name and address of manufacturer, packer "
-                    "and/or importer as applicable."
-                ),
-            },
-
-            {
-                "check_id": "LM-06-02",
-                "name": "Common or generic name",
-                "field": "product_name",
-
-                "required": True,
-
-                "automation": "AUTOMATED",
-
-                "expected": (
-                    "The common or generic name of the commodity "
-                    "should be identifiable."
-                ),
-            },
-
-            {
-                "check_id": "LM-06-03",
-                "name": "Net quantity",
-                "field": "net_quantity",
-
-                "required": True,
-
-                "automation": "AUTOMATED",
-
-                "expected": (
-                    "Net quantity should be declared using "
-                    "the applicable standard unit or number."
-                ),
-            },
-
-            {
-                "check_id": "LM-06-04",
-                "name": "Manufacturing / pre-packing / import date",
-                "field": "date_of_manufacture",
-
-                "required": True,
-
-                "automation": "CONDITIONAL",
-
-                "expected": (
-                    "Applicable month and year information "
-                    "should be declared."
-                ),
-            },
-
-            {
-                "check_id": "LM-06-05",
-                "name": "Best before / use by",
-                "field": "best_before",
-
-                "required_when": (
-                    "Commodity may become unfit for human consumption "
-                    "after a period of time."
-                ),
-
-                "automation": "CONDITIONAL",
-
-                "expected": (
-                    "Best before or use-by information should be "
-                    "declared where applicable."
-                ),
-            },
-
-            {
-                "check_id": "LM-06-06",
-                "name": "Maximum Retail Price",
-                "field": "mrp",
-
-                "required": True,
-
-                "automation": "AUTOMATED",
-
-                "expected": (
-                    "Retail sale price should be declared as required "
-                    "by the applicable Rule."
-                ),
-            },
-
-            {
-                "check_id": "LM-06-07",
-                "name": "Consumer complaint contact",
-                "field": "consumer_contact",
-
-                "required": True,
-
-                "automation": "AUTOMATED",
-
-                "expected": (
-                    "Name/address/telephone/e-mail information "
-                    "for consumer complaints should be available "
-                    "as applicable."
-                ),
-            },
+            {"check_id":"LM-06-01A","subrule":"6(1)(a)","name":"Manufacturer / packer / importer name and address","field":"manufacturer_or_packer","required":True,"automation":"AUTOMATED","expected":"Applicable responsible-party name and complete address should be identifiable."},
+            {"check_id":"LM-06-01AA","subrule":"6(1)(aa)","name":"Country of origin for imported packages","field":"country_of_origin","required_when":"Imported commodity","automation":"CONDITIONAL","expected":"Country of origin should be declared for an imported package."},
+            {"check_id":"LM-06-02","subrule":"6(1)(b)","name":"Common / generic name","field":"product_name","required":True,"automation":"AUTOMATED","expected":"The common or generic name of the commodity should be identifiable."},
+            {"check_id":"LM-06-03","subrule":"6(1)(c)","name":"Net quantity","field":"net_quantity","required":True,"automation":"AUTOMATED","expected":"Net quantity should be declared in the applicable standard unit or number."},
+            {"check_id":"LM-06-04","subrule":"6(1)(d)","name":"Month and year of manufacture / pre-packing / import","field":"date_of_manufacture","required_when":"Applicable non-food commodity; food products follow applicable food-law requirements.","automation":"CONDITIONAL","expected":"Applicable month and year information should be declared."},
+            {"check_id":"LM-06-05","subrule":"6(1)(da)","name":"Best before / use by","field":"best_before","required_when":"Commodity may become unfit for human consumption after a period of time.","automation":"CONDITIONAL","expected":"Best-before or use-by information should be declared where applicable."},
+            {"check_id":"LM-06-06","subrule":"6(1)(e)","name":"Maximum Retail Price","field":"mrp","required":True,"automation":"AUTOMATED","expected":"Retail sale price should be declared as MRP inclusive of all taxes in Indian currency, subject to applicable exceptions."},
+            {"check_id":"LM-06-07","subrule":"6(1)(f)","name":"Dimensions","field":"dimensions","required_when":"Dimensions are relevant to the commodity.","automation":"CONDITIONAL","expected":"Applicable dimensions should be declared."},
+            {"check_id":"LM-06-08","subrule":"6(2)","name":"Consumer complaint contact","field":"consumer_contact","required":True,"automation":"AUTOMATED","expected":"Name/address/telephone/e-mail information for consumer complaints should be identifiable as applicable."},
+            {"check_id":"LM-06-09","subrule":"6(11)","name":"Unit Sale Price","field":"unit_sale_price","required_when":"Applicable retail package and unit-sale-price provision applies.","automation":"CONDITIONAL","expected":"Unit sale price should be declared in the prescribed unit and format, unless the applicable exception applies."},
         ],
-
-        "evidence_needed": [
-            "product_name",
-            "manufacturer_or_packer",
-            "address",
-            "net_quantity",
-            "mrp",
-            "date_of_manufacture",
-            "best_before",
-            "use_by",
-            "consumer_contact",
-            "ocr_text",
-        ],
-
-        "expected": (
-            "All applicable mandatory declarations should be "
-            "present, identifiable and sufficiently evidenced."
-        ),
-
-        "possible_status": [
-            "PASS",
-            "FAIL",
-            "REVIEW",
-            "NOT_APPLICABLE",
-        ],
-
-        "rule_reference": (
-            "Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 6"
-        ),
-
-        "suggestion": (
-            "Verify each mandatory declaration individually. "
-            "Do not mark a declaration as absent merely because "
-            "OCR failed to detect it."
-        ),
+        "evidence_needed": ["product_name","manufacturer_or_packer","address","country_of_origin","net_quantity","mrp","date_of_manufacture","best_before","use_by","dimensions","consumer_contact","unit_sale_price","ocr_text"],
+        "expected": "All applicable Rule 6 declarations should be present, identifiable and sufficiently evidenced.",
+        "possible_status": ["PASS", "FAIL", "REVIEW", "NOT_APPLICABLE"],
+        "rule_reference": "Legal Metrology (Packaged Commodities) Rules, 2011 — Rule 6 and applicable amendments",
+        "suggestion": "Evaluate each Rule 6 sub-rule independently. Applicability must be determined before declaring a field missing.",
     },
 
 
@@ -1990,9 +1821,10 @@ SCHEDULE_MASTER = [
     {
         "schedule_id": "SCH-02",
         "schedule_number": "Second Schedule",
-        "name": "Standard package quantities",
-        "used_by": ["LM-05"],
-        "automation": "CONDITIONAL",
+        "name": "Historical standard package quantities — Rule 5 omitted",
+        "used_by": [],
+        "automation": "HISTORICAL_ONLY",
+        "status": "NOT_USED_BY_CURRENT_RULE_5",
     },
 
     {
@@ -2046,7 +1878,7 @@ def get_rule(
     rule_id: str,
 ) -> Optional[Dict[str, Any]]:
     """
-    Return one rule from the 2011 baseline.
+    Return one rule from the current consolidated rule master.
     """
 
     for rule in RULE_MASTER:
@@ -2074,7 +1906,7 @@ def get_rule_by_number(
 
 def get_all_rules() -> List[Dict[str, Any]]:
     """
-    Return all rules in the 2011 baseline.
+    Return all rules in the current consolidated rule master.
     """
 
     return RULE_MASTER
@@ -2147,7 +1979,7 @@ def get_schedule(
 
 def get_rule_summary() -> Dict[str, int]:
     """
-    Return summary of the college-demo Rule Master.
+    Return summary of the current consolidated Rule Master.
     """
 
     summary = {

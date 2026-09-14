@@ -20,12 +20,20 @@ export function Dashboard() {
     averageScore: 0,
   });
   const [scans, setScans] = useState<ScanHistoryItem[]>([]);
-
   useEffect(() => {
-    const loadedScans = historyService.getScans();
-    const loadedStats = historyService.getStats();
-    setScans(loadedScans);
-    setStats(loadedStats);
+    async function loadData() {
+      try {
+        const [loadedScans, loadedStats] = await Promise.all([
+          historyService.getScans(),
+          historyService.getStats(),
+        ]);
+        setScans(loadedScans);
+        setStats(loadedStats);
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+      }
+    }
+    loadData();
   }, []);
 
   return (

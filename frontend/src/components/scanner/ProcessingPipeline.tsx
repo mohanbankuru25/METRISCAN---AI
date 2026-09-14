@@ -1,4 +1,5 @@
-import { CheckCircle2, Loader2, Circle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Package, CheckCircle2 } from "lucide-react";
 
 export interface PipelineStep {
   stepNumber: string;
@@ -6,114 +7,368 @@ export interface PipelineStep {
   description: string;
 }
 
-export const PIPELINE_STEPS: PipelineStep[] = [
-  { stepNumber: "01", title: "Image Capture & Validation", description: "Package image received and validated" },
-  { stepNumber: "02", title: "Image Preprocessing", description: "OpenCV contrast & resolution enhancement" },
-  { stepNumber: "03", title: "PaddleOCR Extraction", description: "Detecting bounding boxes and text blocks" },
-  { stepNumber: "04", title: "Gemini Vision Analysis", description: "Understanding multi-panel package layout" },
-  { stepNumber: "05", title: "Extraction Fusion", description: "Merging OCR and Vision AI product declarations" },
-  { stepNumber: "06", title: "OCR Field Recovery", description: "Recovering missing values from raw OCR streams" },
-  { stepNumber: "07", title: "Product Classification", description: "Categorizing commodity type and schedule" },
-  { stepNumber: "08", title: "Applicability Analysis", description: "Determining applicable Legal Metrology rules" },
-  { stepNumber: "09", title: "Legal Metrology Rules Evaluation", description: "Evaluating declarations against Rules, 2011" },
-  { stepNumber: "10", title: "Compliance Score & Report Result", description: "Synthesizing evidence and generating score" },
-];
+export const PIPELINE_STEPS: PipelineStep[] = [];
 
 interface ProcessingPipelineProps {
-  currentStepIndex: number;
-  isComplete: boolean;
+  currentStepIndex?: number;
+  isComplete?: boolean;
+  isCached?: boolean;
 }
 
-export function ProcessingPipeline({ currentStepIndex, isComplete }: ProcessingPipelineProps) {
+export function ProcessingPipeline({
+  isComplete = false,
+  isCached = false,
+}: ProcessingPipelineProps) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (isComplete || isCached) {
+      setProgress(100);
+      return;
+    }
+
+    // Smoothly advance progress with asymptotic decay while awaiting the actual backend API response.
+    // Strictly capped at 92% and NEVER reaches 100% until isComplete is explicitly triggered by the API response.
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 92) {
+          return 92;
+        }
+        const remaining = 92 - prev;
+        const increment = Math.max(0.04, remaining * 0.009);
+        return Math.min(prev + increment, 92);
+      });
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [isComplete, isCached]);
+
+  // Generic status text that NEVER falsely claims unverified backend stages like PaddleOCR or Compliance
+  const getStatusText = (pct: number, complete: boolean, cached: boolean) => {
+    if (cached) {
+      return "Retrieving previous analysis...";
+    }
+    if (complete) {
+      return "Analysis Complete";
+    }
+    if (pct >= 50) {
+      return "Processing Product Information...";
+    }
+    return "Analyzing Product...";
+  };
+
+  const roundedPct = isComplete || isCached ? 100 : Math.round(progress);
+  const statusMessage = getStatusText(roundedPct, isComplete, isCached);
+
+  // SVG Circular ring calculations
+  // Radius = 56, Circumference = 2 * PI * 56 ≈ 351.86
+  const radius = 56;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (Math.min(progress, 100) / 100) * circumference;
+
+  const isSuccess = isComplete || isCached;
+
   return (
-    <div className="panel-card">
-      <div className="panel-card-header">
-        <div className="panel-card-title">
-          <Loader2 size={18} className={!isComplete ? "spin" : ""} color="#2563eb" />
-          <span>AI & Legal Metrology Processing Pipeline</span>
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        backgroundColor: "rgba(15, 23, 42, 0.45)",
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+        zIndex: 20,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+        overflow: "hidden",
+        borderRadius: "10px",
+        pointerEvents: "none",
+        animation: "overlayFadeIn 0.3s ease-out",
+      }}
+    >
+      {/* Computer-Vision HUD Scanning Frame */}
+      <div
+        style={{
+          position: "relative",
+          width: "280px",
+          height: "280px",
+          maxWidth: "88%",
+          maxHeight: "88%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {/* Glowing HUD Detection Corner Brackets */}
+        {/* Top-Left */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "26px",
+            height: "26px",
+            borderTop: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderLeft: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderTopLeftRadius: "6px",
+            filter: `drop-shadow(0 0 8px ${isSuccess ? "rgba(16, 185, 129, 0.8)" : "rgba(56, 189, 248, 0.8)"})`,
+          }}
+        />
+        {/* Top-Right */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            width: "26px",
+            height: "26px",
+            borderTop: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderRight: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderTopRightRadius: "6px",
+            filter: `drop-shadow(0 0 8px ${isSuccess ? "rgba(16, 185, 129, 0.8)" : "rgba(56, 189, 248, 0.8)"})`,
+          }}
+        />
+        {/* Bottom-Left */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            width: "26px",
+            height: "26px",
+            borderBottom: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderLeft: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderBottomLeftRadius: "6px",
+            filter: `drop-shadow(0 0 8px ${isSuccess ? "rgba(16, 185, 129, 0.8)" : "rgba(56, 189, 248, 0.8)"})`,
+          }}
+        />
+        {/* Bottom-Right */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            right: 0,
+            width: "26px",
+            height: "26px",
+            borderBottom: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderRight: `3px solid ${isSuccess ? "#10b981" : "#38bdf8"}`,
+            borderBottomRightRadius: "6px",
+            filter: `drop-shadow(0 0 8px ${isSuccess ? "rgba(16, 185, 129, 0.8)" : "rgba(56, 189, 248, 0.8)"})`,
+          }}
+        />
+
+        {/* Small HUD Header Indicator */}
+        <div
+          style={{
+            position: "absolute",
+            top: "-18px",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.35rem",
+            color: isSuccess ? "#34d399" : "#38bdf8",
+            fontSize: "0.68rem",
+            fontWeight: 800,
+            letterSpacing: "0.1em",
+            fontFamily: "var(--font-mono), monospace",
+            textTransform: "uppercase",
+            textShadow: `0 0 6px ${isSuccess ? "rgba(16, 185, 129, 0.7)" : "rgba(56, 189, 248, 0.7)"}`,
+          }}
+        >
+          <span
+            style={{
+              width: "5px",
+              height: "5px",
+              borderRadius: "50%",
+              backgroundColor: isSuccess ? "#10b981" : "#38bdf8",
+              boxShadow: `0 0 6px ${isSuccess ? "#10b981" : "#38bdf8"}`,
+              animation: !isSuccess ? "dotBlink 1.2s infinite" : "none",
+            }}
+          />
+          <span>{isCached ? "PRODUCT FOUND" : isComplete ? "ANALYSIS COMPLETE" : "AI SCAN // IN PROGRESS"}</span>
         </div>
-        <span style={{ fontSize: "0.8rem", fontWeight: 700, color: isComplete ? "#059669" : "#2563eb" }}>
-          {isComplete ? "Analysis Complete (10/10)" : `Step ${currentStepIndex + 1} of 10`}
-        </span>
-      </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {PIPELINE_STEPS.map((step, idx) => {
-          const isDone = isComplete || idx < currentStepIndex;
-          const isActive = !isComplete && idx === currentStepIndex;
+        {/* Circular Progress & Product Icon Container */}
+        <div
+          style={{
+            position: "relative",
+            width: "140px",
+            height: "140px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {/* Subtle Outer Rotating Radar Ring */}
+          <svg
+            width="140"
+            height="140"
+            viewBox="0 0 140 140"
+            style={{
+              position: "absolute",
+              animation: "radarRotate 10s linear infinite",
+            }}
+          >
+            <circle
+              cx="70"
+              cy="70"
+              r="66"
+              stroke="rgba(56, 189, 248, 0.28)"
+              strokeWidth="1.5"
+              strokeDasharray="6 8"
+              fill="none"
+            />
+          </svg>
 
-          return (
+          {/* SVG Radial Progress Arc */}
+          <svg
+            width="130"
+            height="130"
+            viewBox="0 0 130 130"
+            style={{ transform: "rotate(-90deg)" }}
+          >
+            {/* Background Track Circle */}
+            <circle
+              cx="65"
+              cy="65"
+              r={radius}
+              stroke="rgba(255, 255, 255, 0.18)"
+              strokeWidth="6"
+              fill="transparent"
+            />
+            {/* Progress Arc */}
+            <circle
+              cx="65"
+              cy="65"
+              r={radius}
+              stroke={isSuccess ? "#10b981" : "#38bdf8"}
+              strokeWidth="6"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              fill="transparent"
+              style={{
+                transition: "stroke-dashoffset 0.25s ease-out, stroke 0.3s ease",
+                filter: isSuccess
+                  ? "drop-shadow(0 0 8px rgba(16, 185, 129, 0.8))"
+                  : "drop-shadow(0 0 8px rgba(56, 189, 248, 0.8))",
+              }}
+            />
+          </svg>
+
+          {/* Center Glass Card with Product Icon & Percentage */}
+          <div
+            style={{
+              position: "absolute",
+              width: "92px",
+              height: "92px",
+              borderRadius: "50%",
+              background: "rgba(15, 23, 42, 0.82)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              border: `1.5px solid ${isSuccess ? "rgba(16, 185, 129, 0.6)" : "rgba(56, 189, 248, 0.45)"}`,
+              boxShadow: isSuccess
+                ? "0 0 22px rgba(16, 185, 129, 0.35), inset 0 0 12px rgba(16, 185, 129, 0.2)"
+                : "0 0 22px rgba(56, 189, 248, 0.3), inset 0 0 12px rgba(56, 189, 248, 0.15)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "2px",
+              transition: "all 0.3s ease",
+            }}
+          >
+            {/* Product Icon */}
             <div
-              key={step.stepNumber}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "0.85rem",
-                padding: "0.6rem 0.85rem",
-                borderRadius: "8px",
-                backgroundColor: isActive ? "#eff6ff" : isDone ? "#f8fafc" : "#ffffff",
-                border: `1px solid ${isActive ? "#bfdbfe" : isDone ? "#e2e8f0" : "#f1f5f9"}`,
-                transition: "all 0.15s ease-in-out"
+                justifyContent: "center",
+                animation: !isSuccess ? "hudPulse 2s ease-in-out infinite" : "none",
               }}
             >
-              {/* Step indicator */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {isDone ? (
-                  <CheckCircle2 size={18} color="#059669" />
-                ) : isActive ? (
-                  <Loader2 size={18} color="#2563eb" style={{ animation: "spin 1s linear infinite" }} />
-                ) : (
-                  <Circle size={18} color="#cbd5e1" />
-                )}
-              </div>
-
-              {/* Number */}
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  color: isDone ? "#059669" : isActive ? "#2563eb" : "#94a3b8"
-                }}
-              >
-                {step.stepNumber}
-              </span>
-
-              {/* Title & Desc */}
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: "0.85rem",
-                    fontWeight: isDone || isActive ? 700 : 500,
-                    color: isDone ? "#0f172a" : isActive ? "#1e40af" : "#64748b"
-                  }}
-                >
-                  {step.title}
-                </div>
-                <div style={{ fontSize: "0.725rem", color: isDone ? "#64748b" : isActive ? "#3b82f6" : "#94a3b8" }}>
-                  {step.description}
-                </div>
-              </div>
-
-              {/* Badge */}
-              <div>
-                {isDone && <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#059669", backgroundColor: "#ecfdf5", padding: "0.15rem 0.45rem", borderRadius: "4px" }}>Complete</span>}
-                {isActive && <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#2563eb", backgroundColor: "#eff6ff", padding: "0.15rem 0.45rem", borderRadius: "4px" }}>Processing...</span>}
-              </div>
+              {isSuccess ? (
+                <CheckCircle2 size={26} color="#10b981" strokeWidth={2.4} />
+              ) : (
+                <Package size={26} color="#38bdf8" strokeWidth={2.2} />
+              )}
             </div>
-          );
-        })}
+
+            {/* Percentage inside center */}
+            <div
+              style={{
+                fontFamily: "var(--font-mono), 'JetBrains Mono', monospace",
+                fontSize: "1.18rem",
+                fontWeight: 800,
+                color: isSuccess ? "#10b981" : "#ffffff",
+                lineHeight: 1,
+                letterSpacing: "-0.02em",
+                textShadow: "0 2px 6px rgba(0, 0, 0, 0.6)",
+              }}
+            >
+              {roundedPct}%
+            </div>
+          </div>
+        </div>
+
+        {/* Status Pill Badge directly below the HUD element */}
+        <div
+          style={{
+            marginTop: "1.1rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.38rem 1rem",
+            borderRadius: "9999px",
+            backgroundColor: "rgba(15, 23, 42, 0.86)",
+            border: `1px solid ${isSuccess ? "rgba(16, 185, 129, 0.4)" : "rgba(56, 189, 248, 0.35)"}`,
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
+            color: isSuccess ? "#34d399" : "#f1f5f9",
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+          }}
+        >
+          <span
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              backgroundColor: isSuccess ? "#10b981" : "#38bdf8",
+              boxShadow: `0 0 8px ${isSuccess ? "#10b981" : "#38bdf8"}`,
+              animation: !isSuccess ? "dotBlink 1.2s infinite" : "none",
+            }}
+          />
+          <span>{statusMessage}</span>
+        </div>
       </div>
 
       <style>{`
-        @keyframes spin {
+        @keyframes radarRotate {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        .spin {
-          animation: spin 1.5s linear infinite;
+        @keyframes hudPulse {
+          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(56, 189, 248, 0)); }
+          50% { transform: scale(1.08); filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6)); }
+        }
+        @keyframes dotBlink {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(0.8); }
+        }
+        @keyframes overlayFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
       `}</style>
     </div>
   );
 }
+
+export const ProductAnalysisProgress = ProcessingPipeline;
+
+

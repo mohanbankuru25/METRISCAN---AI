@@ -36,4 +36,5 @@ export interface OCRResponse {
   recovered_fields?: string[];
   applicability?: unknown;
   compliance?: unknown;
+  cached?: boolean;
 }

@@ -1,10 +1,13 @@
+import re
 from typing import Any, Dict, List, Optional
+
+from .visual_compliance_analyzer import VisualComplianceAnalyzer
 
 
 class ComplianceEngine:
     """
-    Legal Metrology (Packaged Commodities) Rules, 2011
-    Compliance evaluation engine.
+    Legal Metrology (Packaged Commodities) Rules, 2011,
+    as amended - Compliance evaluation engine.
 
     Important:
     - This engine evaluates image/OCR evidence.
@@ -29,11 +32,16 @@ class ComplianceEngine:
         "OUT_OF_SCOPE",
     }
 
+    PASS_SCORE_THRESHOLD = 80.0
+    REVIEW_SCORE_THRESHOLD = 50.0
+
     def evaluate(
         self,
         product_data: Dict[str, Any],
         applicability_result: Dict[str, Any],
         ocr_results: Optional[List[Dict[str, Any]]] = None,
+        visual_analysis: Optional[Dict[str, Any]] = None,
+        dynamic_rules: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
 
         ocr_results = ocr_results or []
@@ -87,19 +95,22 @@ class ComplianceEngine:
 
         results.append(
             self._evaluate_rule_07(
-                applicability_rules.get("LM-07")
+                applicability_rules.get("LM-07"),
+                visual_analysis,
             )
         )
 
         results.append(
             self._evaluate_rule_08(
-                applicability_rules.get("LM-08")
+                applicability_rules.get("LM-08"),
+                visual_analysis,
             )
         )
 
         results.append(
             self._evaluate_rule_09(
-                applicability_rules.get("LM-09")
+                applicability_rules.get("LM-09"),
+                visual_analysis,
             )
         )
 
@@ -190,16 +201,21 @@ class ComplianceEngine:
         )
 
         # --------------------------------------------------------------
+        # Dynamic Compliance Rules (from Supabase)
+        # --------------------------------------------------------------
+        dynamic_results = self._evaluate_dynamic_rules(
+            dynamic_rules,
+            product_data,
+            ocr_results,
+            visual_analysis
+        )
+        results.extend(dynamic_results)
+
+        # --------------------------------------------------------------
         # Summary
         # --------------------------------------------------------------
 
         summary = self._build_summary(results)
-
-        # --------------------------------------------------------------
-        # Overall legal-review status
-        # --------------------------------------------------------------
-
-        overall_status = self._calculate_overall_status(results)
 
         # --------------------------------------------------------------
         # REAL COMPLIANCE SCORE
@@ -207,12 +223,30 @@ class ComplianceEngine:
 
         compliance_score = self._calculate_compliance_score(results)
 
+        # --------------------------------------------------------------
+        # Overall legal-review status (evaluated according to compliance score)
+        # --------------------------------------------------------------
+
+        overall_status = self._calculate_overall_status(
+            results,
+            compliance_score=compliance_score,
+        )
+
         return {
             "overall_status": overall_status,
             "compliance_score": compliance_score,
             "score": compliance_score,
             "summary": summary,
             "results": results,
+            "engine_version": "LM-PC-current-amendments-evidence-v3",
+            "legal_framework": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended",
+            "decision_note": (
+                f"Overall status is evaluated according to compliance score thresholds "
+                f"(PASS >= {self.PASS_SCORE_THRESHOLD}%, REVIEW >= {self.REVIEW_SCORE_THRESHOLD}%, "
+                f"FAIL < {self.REVIEW_SCORE_THRESHOLD}%). "
+                "Evidence-based indicator; physical quantity, calibrated dimensions, placement and "
+                "other context-dependent requirements may require enforcement verification."
+            ),
         }
 
     # ==================================================================
@@ -307,7 +341,7 @@ class ComplianceEngine:
             "suggestion": suggestion,
             "rule_reference": rule_reference
             or f"Legal Metrology (Packaged Commodities) Rules, 2011 - Rule {rule_number}",
-            "source": "Legal Metrology (Packaged Commodities) Rules, 2011",
+            "source": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended",
             "weight": weight,
         }
 
@@ -357,9 +391,10 @@ class ComplianceEngine:
             "LM-03",
             "3",
             "Packages to which Chapter II does not apply",
-            "PASS",
-            expected="Chapter II applicability determined from package context.",
-            reason="Available package evidence indicates that Chapter II applies.",
+            "REVIEW",
+            expected="Chapter II applicability must be determined from package type and legal exclusions.",
+            reason="The package appears within the general scope, but image evidence alone does not establish every Rule 3 exclusion.",
+            suggestion="Verify the package against the Rule 3 exclusions when required.",
         )
 
     # ==================================================================
@@ -393,24 +428,24 @@ class ComplianceEngine:
 
     def _evaluate_rule_05(self, applicability):
 
-        if self._is_not_applicable(applicability):
-            return self._result(
-                "LM-05",
-                "5",
-                "Specific commodities to be packed in standard quantities",
-                "NOT_APPLICABLE",
-                applicable=False,
-                reason="Rule 5 is not applicable based on current package context.",
-            )
-
+        # Rule 5 was omitted by the Legal Metrology (Packaged
+        # Commodities) (Amendment) Rules, 2021.
         return self._result(
             "LM-05",
             "5",
-            "Specific commodities to be packed in standard quantities",
-            "REVIEW",
-            expected="Commodity-specific standard package quantity must be checked against the applicable Second Schedule entry.",
-            reason="Commodity-specific Second Schedule classification is required before a definitive automated result can be given.",
-            suggestion="Verify the commodity and applicable standard package quantity in the Second Schedule.",
+            "Rule 5 - omitted",
+            "OUT_OF_SCOPE",
+            applicable=False,
+            expected="Rule 5 is omitted from the current operative Rules.",
+            reason=(
+                "Rule 5 was omitted by the 2021 amendment and therefore "
+                "is not evaluated as an active package-compliance requirement."
+            ),
+            suggestion=None,
+            rule_reference=(
+                "Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 5 "
+                "(omitted by 2021 amendment)"
+            ),
         )
 
     # ==================================================================
@@ -423,59 +458,57 @@ class ComplianceEngine:
         product_data,
         ocr_results,
     ):
+        """
+        Rule 6 is the main declaration rule.
+
+        Important design choice:
+        A field being absent from OCR is NOT automatically treated as a legal
+        violation.  The engine returns REVIEW when evidence is insufficient.
+        FAIL is reserved for evidence that positively indicates a declaration
+        is incorrect or conflicts with the rule.
+        """
+
+        if self._is_out_of_scope(applicability):
+            return self._rule6_status(
+                "OUT_OF_SCOPE",
+                applicability,
+                product_data,
+                ocr_results,
+            )
+
+        if self._is_not_applicable(applicability):
+            return self._rule6_status(
+                "NOT_APPLICABLE",
+                applicability,
+                product_data,
+                ocr_results,
+            )
 
         results = []
 
-        if self._is_not_applicable(applicability):
-
-            for suffix, name in [
-                ("01", "Manufacturer / packer / importer"),
-                ("02", "Common or generic name"),
-                ("03", "Net quantity"),
-                ("04", "Manufacturing / pre-packing / import date"),
-                ("05", "Best before / use by"),
-                ("06", "Maximum Retail Price"),
-                ("07", "Consumer complaint contact"),
-            ]:
-
-                results.append(
-                    self._result(
-                        f"LM-06-{suffix}",
-                        "6",
-                        name,
-                        "NOT_APPLICABLE",
-                        applicable=False,
-                        reason="Rule 6 is not applicable based on package context.",
-                    )
-                )
-
-            return results
-
-        # --------------------------------------------------------------
-        # 06-01 Manufacturer / Packer / Importer
-        # --------------------------------------------------------------
-
+        # 6(1)(a) Manufacturer / packer / importer name and address
         results.append(
-            self._evaluate_field(
-                rule_id="LM-06-01",
-                rule_number="6",
-                rule_name="Manufacturer / packer / importer",
-                field_name="manufacturer_or_packer",
-                product_data=product_data,
-                ocr_results=ocr_results,
-                expected="Applicable manufacturer, packer or importer identification.",
+            self._evaluate_manufacturer_declaration(
+                product_data,
+                ocr_results,
             )
         )
 
-        # --------------------------------------------------------------
-        # 06-02 Product name
-        # --------------------------------------------------------------
+        # 6(1)(aa) Country of origin is mandatory for imported products.
+        results.append(
+            self._evaluate_country_of_origin(
+                applicability,
+                product_data,
+                ocr_results,
+            )
+        )
 
+        # 6(1)(b) Common / generic name
         results.append(
             self._evaluate_field(
-                rule_id="LM-06-02",
-                rule_number="6",
-                rule_name="Common or generic name",
+                rule_id="LM-06-03",
+                rule_number="6(1)(b)",
+                rule_name="Common / generic name",
                 field_name="product_name",
                 product_data=product_data,
                 ocr_results=ocr_results,
@@ -483,25 +516,20 @@ class ComplianceEngine:
             )
         )
 
-        # --------------------------------------------------------------
-        # 06-03 Net quantity
-        # --------------------------------------------------------------
-
+        # 6(1)(c) Net quantity
         results.append(
             self._evaluate_quantity(
-                rule_id="LM-06-03",
+                rule_id="LM-06-04",
                 product_data=product_data,
                 ocr_results=ocr_results,
             )
         )
 
-        # --------------------------------------------------------------
-        # 06-04 Manufacturing / pre-packing / import date
-        # --------------------------------------------------------------
-
+        # 6(1)(d) Month/year of manufacture / pre-packing / import
         results.append(
             self._evaluate_date(
-                rule_id="LM-06-04",
+                rule_id="LM-06-05",
+                rule_number="6(1)(d)",
                 rule_name="Manufacturing / pre-packing / import date",
                 product_data=product_data,
                 ocr_results=ocr_results,
@@ -509,17 +537,16 @@ class ComplianceEngine:
                     "date_of_manufacture",
                     "packed_on",
                 ],
-                expected="Applicable date of manufacture, pre-packing or import.",
+                expected="Applicable month and year of manufacture, pre-packing or import.",
             )
         )
 
-        # --------------------------------------------------------------
-        # 06-05 Best before / use by
-        # --------------------------------------------------------------
-
+        # 6(1)(da) Best before / use by for commodities that can become
+        # unfit for human consumption.
         results.append(
             self._evaluate_date(
-                rule_id="LM-06-05",
+                rule_id="LM-06-06",
+                rule_number="6(1)(da)",
                 rule_name="Best before / use by",
                 product_data=product_data,
                 ocr_results=ocr_results,
@@ -528,49 +555,596 @@ class ComplianceEngine:
                     "use_by",
                     "expiry_date",
                 ],
-                expected="Applicable best-before, use-by or expiry declaration where required.",
+                expected="Best before or use by date, month and year where applicable.",
             )
         )
 
-        # --------------------------------------------------------------
-        # 06-06 MRP
-        # --------------------------------------------------------------
-
+        # 6(1)(e) Maximum retail price
         results.append(
-            self._evaluate_field(
-                rule_id="LM-06-06",
-                rule_number="6",
-                rule_name="Maximum Retail Price",
-                field_name="mrp",
-                product_data=product_data,
-                ocr_results=ocr_results,
-                expected="Maximum Retail Price inclusive of all taxes, where applicable.",
+            self._evaluate_mrp(
+                product_data,
+                ocr_results,
             )
         )
 
-        # --------------------------------------------------------------
-        # 06-07 Consumer complaint contact
-        # --------------------------------------------------------------
+        # 6(1)(f) Dimensions where relevant
+        results.append(
+            self._evaluate_dimensions(
+                product_data,
+                applicability,
+                ocr_results,
+            )
+        )
 
+        # 6(2) Consumer complaint contact
         results.append(
             self._evaluate_field(
-                rule_id="LM-06-07",
-                rule_number="6",
+                rule_id="LM-06-09",
+                rule_number="6(2)",
                 rule_name="Consumer complaint contact",
                 field_name="consumer_contact",
                 product_data=product_data,
                 ocr_results=ocr_results,
-                expected="Consumer complaint/contact information where applicable.",
+                expected="Name, address, telephone number and/or email/contact details of the person or office for consumer complaints, as applicable.",
+                label_patterns=[
+                    "consumer care",
+                    "consumer complaint",
+                    "customer care",
+                    "customer service",
+                    "contact us",
+                    "reach us",
+                    "helpline",
+                    "complaint",
+                ],
+            )
+        )
+
+        # 6(11) Unit sale price.
+        results.append(
+            self._evaluate_unit_sale_price(
+                product_data,
+                ocr_results,
             )
         )
 
         return results
 
+    def _rule6_status(
+        self,
+        status,
+        applicability,
+        product_data,
+        ocr_results,
+    ):
+        names = [
+            ("LM-06-01", "6(1)(a)", "Manufacturer / packer / importer"),
+            ("LM-06-02", "6(1)(aa)", "Country of origin"),
+            ("LM-06-03", "6(1)(b)", "Common / generic name"),
+            ("LM-06-04", "6(1)(c)", "Net quantity"),
+            ("LM-06-05", "6(1)(d)", "Manufacturing / pre-packing / import date"),
+            ("LM-06-06", "6(1)(da)", "Best before / use by"),
+            ("LM-06-07", "6(1)(e)", "Maximum Retail Price"),
+            ("LM-06-08", "6(1)(f)", "Dimensions where relevant"),
+            ("LM-06-09", "6(2)", "Consumer complaint contact"),
+            ("LM-06-10", "6(11)", "Unit sale price"),
+        ]
+
+        return [
+            self._result(
+                rule_id,
+                rule_number,
+                name,
+                status,
+                applicable=False,
+                reason=(
+                    "Rule 6 is not applicable to this package context."
+                    if status == "NOT_APPLICABLE"
+                    else "Package is outside the evaluated Legal Metrology scope."
+                ),
+            )
+            for rule_id, rule_number, name in names
+        ]
+
+    def _evaluate_manufacturer_declaration(
+        self,
+        product_data,
+        ocr_results,
+    ):
+        manufacturer = product_data.get("manufacturer_or_packer")
+        address = product_data.get("address")
+
+        if not self._valid_value(manufacturer) and not self._valid_value(address):
+            return self._result(
+                "LM-06-01",
+                "6(1)(a)",
+                "Manufacturer / packer / importer",
+                "REVIEW",
+                expected="Applicable manufacturer, packer or importer name and address.",
+                extracted={"name": manufacturer, "address": address},
+                reason="No reliable manufacturer/packer/importer identification and address were detected.",
+                suggestion="Capture the complete Manufacturer/Packer/Importer declaration and its associated address.",
+            )
+
+        if not self._valid_value(manufacturer) or not self._valid_value(address):
+            return self._result(
+                "LM-06-01",
+                "6(1)(a)",
+                "Manufacturer / packer / importer",
+                "REVIEW",
+                expected="Applicable manufacturer, packer or importer name and address.",
+                extracted={"name": manufacturer, "address": address},
+                reason="Only part of the required identity/address information was detected.",
+                suggestion="Capture the complete name and address together.",
+            )
+
+        evidence = self._find_evidence(
+            [manufacturer, address],
+            ocr_results,
+        )
+
+        if not evidence:
+            return self._result(
+                "LM-06-01",
+                "6(1)(a)",
+                "Manufacturer / packer / importer",
+                "REVIEW",
+                expected="Applicable manufacturer, packer or importer name and address.",
+                extracted={"name": manufacturer, "address": address},
+                reason="The extracted identity/address could not be matched reliably to OCR evidence.",
+                suggestion="Verify the declaration visually before treating it as compliant.",
+            )
+
+        return self._result(
+            "LM-06-01",
+            "6(1)(a)",
+            "Manufacturer / packer / importer",
+            "PASS",
+            expected="Applicable manufacturer, packer or importer name and address.",
+            extracted={"name": manufacturer, "address": address},
+            evidence=evidence,
+            reason="A manufacturer/packer/importer identity and associated address were detected.",
+        )
+
+    def _evaluate_country_of_origin(
+        self,
+        applicability,
+        product_data,
+        ocr_results,
+    ):
+        imported = self._is_imported_product(applicability, product_data, ocr_results)
+
+        if imported is False:
+            return self._result(
+                "LM-06-02",
+                "6(1)(aa)",
+                "Country of origin",
+                "NOT_APPLICABLE",
+                applicable=False,
+                expected="Country of origin for imported products.",
+                extracted=product_data.get("country_of_origin"),
+                reason="The available evidence does not indicate that the product is imported.",
+            )
+
+        country = product_data.get("country_of_origin")
+
+        if self._valid_value(country):
+            evidence = self._find_labeled_evidence(
+                country,
+                ocr_results,
+                ["country of origin", "made in", "manufactured in", "origin"],
+            )
+            return self._result(
+                "LM-06-02",
+                "6(1)(aa)",
+                "Country of origin",
+                "PASS" if evidence else "REVIEW",
+                expected="Country of origin for imported products.",
+                extracted=country,
+                evidence=evidence,
+                reason=(
+                    "Country of origin was detected with supporting label evidence."
+                    if evidence
+                    else "Country of origin was extracted but its label association could not be confirmed."
+                ),
+                suggestion=None if evidence else "Verify the explicit Country of Origin declaration.",
+            )
+
+        if imported is True:
+            return self._result(
+                "LM-06-02",
+                "6(1)(aa)",
+                "Country of origin",
+                "REVIEW",
+                expected="Country of origin for imported products.",
+                extracted=country,
+                reason="The package appears to be imported, but an explicit country-of-origin declaration was not confidently detected.",
+                suggestion="Capture the explicit Country of Origin / Made In declaration.",
+            )
+
+        return self._result(
+            "LM-06-02",
+            "6(1)(aa)",
+            "Country of origin",
+            "REVIEW",
+            expected="Country of origin for imported products.",
+            extracted=country,
+            reason="Import status could not be determined reliably from the available evidence.",
+            suggestion="Verify whether the package is imported before evaluating country of origin.",
+        )
+
+    def _is_imported_product(
+        self,
+        applicability,
+        product_data,
+        ocr_results,
+    ):
+        for key in ("is_imported", "imported"):
+            value = product_data.get(key)
+            if isinstance(value, bool):
+                return value
+
+        for key in ("is_imported", "imported", "country_of_origin"):
+            value = applicability.get(key) if isinstance(applicability, dict) else None
+            if isinstance(value, bool):
+                return value
+
+        country = product_data.get("country_of_origin")
+        if self._valid_value(country):
+            normalized = str(country).strip().lower()
+            if normalized not in {"india", "indian"}:
+                return True
+
+        text = " ".join(
+            str(item.get("text", ""))
+            for item in (ocr_results or [])
+            if isinstance(item, dict)
+        ).lower()
+
+        import_markers = [
+            "imported by",
+            "importer",
+            "country of origin",
+            "made in china",
+            "made in usa",
+            "made in japan",
+            "made in uae",
+            "made in korea",
+            "made in vietnam",
+        ]
+
+        if any(marker in text for marker in import_markers):
+            return True
+
+        return False
+
+    def _evaluate_mrp(self, product_data, ocr_results):
+        value = product_data.get("mrp")
+
+        if not self._valid_value(value):
+            return self._result(
+                "LM-06-07",
+                "6(1)(e)",
+                "Maximum Retail Price",
+                "REVIEW",
+                expected="Maximum Retail Price in Indian currency, inclusive of all taxes, where applicable.",
+                extracted=value,
+                reason="MRP was not confidently detected.",
+                suggestion="Capture the MRP declaration clearly, including its association with the price.",
+            )
+
+        evidence = self._find_labeled_evidence(
+            value,
+            ocr_results,
+            ["mrp", "maximum retail price", "retail sale price"],
+        )
+
+        if not evidence:
+            return self._result(
+                "LM-06-07",
+                "6(1)(e)",
+                "Maximum Retail Price",
+                "REVIEW",
+                expected="Maximum Retail Price in Indian currency, inclusive of all taxes, where applicable.",
+                extracted=value,
+                reason="A price value was extracted but its MRP label association was not confirmed.",
+                suggestion="Verify that the detected price is explicitly marked as MRP / Maximum Retail Price.",
+            )
+
+        return self._result(
+            "LM-06-07",
+            "6(1)(e)",
+            "Maximum Retail Price",
+            "PASS",
+            expected="Maximum Retail Price in Indian currency, inclusive of all taxes, where applicable.",
+            extracted=value,
+            evidence=evidence,
+            reason="An explicitly labelled MRP declaration was detected.",
+        )
+
+    def _evaluate_dimensions(
+        self,
+        product_data,
+        applicability,
+        ocr_results,
+    ):
+        dimensions = product_data.get("dimensions")
+
+        # A generic packaged-food label normally does not require Rule 6(1)(f)
+        # dimensions.  If applicability explicitly says dimensions are relevant,
+        # evaluate them; otherwise do not penalize the package.
+        relevant = self._flag_from_context(
+            applicability,
+            ["dimensions_relevant", "size_relevant"],
+        )
+
+        if relevant is False:
+            return self._result(
+                "LM-06-08",
+                "6(1)(f)",
+                "Dimensions where relevant",
+                "NOT_APPLICABLE",
+                applicable=False,
+                expected="Dimensions where relevant to the commodity.",
+                extracted=dimensions,
+                reason="Available applicability information indicates that dimensions are not relevant.",
+            )
+
+        if self._valid_value(dimensions):
+            evidence = self._find_evidence([dimensions], ocr_results)
+            return self._result(
+                "LM-06-08",
+                "6(1)(f)",
+                "Dimensions where relevant",
+                "PASS" if evidence else "REVIEW",
+                expected="Dimensions of the commodity where relevant.",
+                extracted=dimensions,
+                evidence=evidence,
+                reason=(
+                    "Relevant dimensions were detected."
+                    if evidence
+                    else "Dimensions were extracted but supporting OCR evidence is weak."
+                ),
+            )
+
+        if relevant is True:
+            return self._result(
+                "LM-06-08",
+                "6(1)(f)",
+                "Dimensions where relevant",
+                "REVIEW",
+                expected="Dimensions of the commodity where relevant.",
+                extracted=dimensions,
+                reason="The commodity context indicates dimensions may be required, but no reliable declaration was detected.",
+                suggestion="Capture the dimensions declaration clearly.",
+            )
+
+        return self._result(
+            "LM-06-08",
+            "6(1)(f)",
+            "Dimensions where relevant",
+            "REVIEW",
+            expected="Dimensions of the commodity where relevant.",
+            extracted=dimensions,
+            reason="The system could not determine from the available evidence whether dimensions are relevant.",
+            suggestion="Verify commodity-specific dimensional applicability.",
+        )
+
+    def _evaluate_unit_sale_price(
+        self,
+        product_data,
+        ocr_results,
+    ):
+        declared = (
+            product_data.get("unit_sale_price")
+            or product_data.get("unit_price")
+            or product_data.get("usp")
+        )
+
+        quantity = product_data.get("net_quantity")
+        mrp = product_data.get("mrp")
+
+        expected_unit = self._calculate_expected_unit_sale_price(
+            quantity,
+            product_data.get("unit_of_measure"),
+            mrp,
+        )
+
+        if not self._valid_value(declared):
+            return self._result(
+                "LM-06-10",
+                "6(11)",
+                "Unit sale price",
+                "REVIEW",
+                expected=(
+                    "Unit sale price should be declared in the prescribed form."
+                    + (
+                        f" Expected approximately {expected_unit} from the detected quantity/MRP."
+                        if expected_unit is not None
+                        else ""
+                    )
+                ),
+                extracted={
+                    "declared": declared,
+                    "calculated_reference": expected_unit,
+                },
+                reason="A separate unit sale price declaration was not confidently detected.",
+                suggestion="Verify whether the package carries the applicable unit sale price declaration.",
+            )
+
+        evidence = self._find_labeled_evidence(
+            declared,
+            ocr_results,
+            [
+                "per g",
+                "per gram",
+                "per kg",
+                "per ml",
+                "per litre",
+                "per liter",
+                "per number",
+                "unit sale price",
+            ],
+        )
+
+        if not evidence:
+            return self._result(
+                "LM-06-10",
+                "6(11)",
+                "Unit sale price",
+                "REVIEW",
+                expected="Applicable unit sale price declaration.",
+                extracted={
+                    "declared": declared,
+                    "calculated_reference": expected_unit,
+                },
+                reason="A unit price value was extracted, but its required unit-sale-price label could not be confirmed.",
+                suggestion="Verify the explicit unit sale price declaration and its unit.",
+            )
+
+        comparison = self._compare_money(declared, expected_unit)
+
+        if comparison is False:
+            return self._result(
+                "LM-06-10",
+                "6(11)",
+                "Unit sale price",
+                "FAIL",
+                expected=f"Applicable unit sale price consistent with quantity and declared MRP; calculated reference: {expected_unit}.",
+                extracted={
+                    "declared": declared,
+                    "calculated_reference": expected_unit,
+                },
+                evidence=evidence,
+                reason="The declared unit sale price conflicts with the quantity/MRP reference calculation.",
+                suggestion="Verify the printed unit sale price, net quantity and MRP.",
+            )
+
+        return self._result(
+            "LM-06-10",
+            "6(11)",
+            "Unit sale price",
+            "PASS" if comparison is True else "REVIEW",
+            expected=f"Applicable unit sale price; calculated reference: {expected_unit}.",
+            extracted={
+                "declared": declared,
+                "calculated_reference": expected_unit,
+            },
+            evidence=evidence,
+            reason=(
+                "Unit sale price was detected and is consistent with the available quantity/MRP evidence."
+                if comparison is True
+                else "Unit sale price was detected, but quantity/MRP evidence is insufficient for a reliable numerical comparison."
+            ),
+            suggestion=None if comparison is True else "Verify the unit sale price against the declared quantity and MRP.",
+        )
+
+    def _calculate_expected_unit_sale_price(
+        self,
+        quantity,
+        unit_of_measure,
+        mrp,
+    ):
+        q = self._parse_quantity(quantity)
+
+        if q is None or q[0] <= 0:
+            return None
+
+        price = self._parse_money(mrp)
+        if price is None:
+            return None
+
+        amount, unit = q
+        unit = unit.lower()
+
+        if unit in {"g", "gm", "gram", "grams"}:
+            # Rule 6(11): per gram when quantity is below 1 kg.
+            if amount < 1000:
+                return f"₹{price / amount:.2f} per g"
+            return f"₹{price / (amount / 1000.0):.2f} per kg"
+
+        if unit in {"kg", "kilogram", "kilograms"}:
+            if amount >= 1:
+                return f"₹{price / amount:.2f} per kg"
+            return f"₹{price / (amount * 1000.0):.2f} per g"
+
+        if unit in {"ml", "millilitre", "milliliter"}:
+            if amount < 1000:
+                return f"₹{price / amount:.2f} per ml"
+            return f"₹{price / (amount / 1000.0):.2f} per litre"
+
+        if unit in {"l", "litre", "liter", "litres", "liters"}:
+            if amount >= 1:
+                return f"₹{price / amount:.2f} per litre"
+            return f"₹{price / (amount * 1000.0):.2f} per ml"
+
+        if unit in {"number", "no", "nos", "piece", "unit", "pair", "set"}:
+            return f"₹{price / amount:.2f} per number"
+
+        return None
+
+    def _parse_quantity(self, value):
+        if not self._valid_value(value):
+            return None
+
+        text = str(value).strip().lower().replace(",", "")
+        match = re.search(
+            r"(\d+(?:\.\d+)?)\s*(kg|g|gm|gram|grams|mg|l|litre|liter|litres|liters|ml|number|nos?|piece|unit|pair|set)\b",
+            text,
+        )
+        if not match:
+            return None
+
+        try:
+            return float(match.group(1)), match.group(2)
+        except (TypeError, ValueError):
+            return None
+
+    def _parse_money(self, value):
+        if not self._valid_value(value):
+            return None
+
+        match = re.search(r"(\d+(?:\.\d+)?)", str(value).replace(",", ""))
+        if not match:
+            return None
+
+        try:
+            return float(match.group(1))
+        except (TypeError, ValueError):
+            return None
+
+    def _compare_money(self, declared, expected):
+        if expected is None:
+            return None
+
+        declared_amount = self._parse_money(declared)
+        expected_match = re.search(r"₹\s*(\d+(?:\.\d+)?)", str(expected))
+
+        if declared_amount is None or not expected_match:
+            return None
+
+        expected_amount = float(expected_match.group(1))
+        return abs(declared_amount - expected_amount) <= 0.02
+
+    def _flag_from_context(self, context, keys):
+        if not isinstance(context, dict):
+            return None
+
+        for key in keys:
+            value = context.get(key)
+            if isinstance(value, bool):
+                return value
+
+        return None
+
     # ==================================================================
     # RULE 7
     # ==================================================================
 
-    def _evaluate_rule_07(self, applicability):
+    def _evaluate_rule_07(
+        self,
+        applicability,
+        visual_analysis=None,
+    ):
 
         if self._is_not_applicable(applicability):
             return self._result(
@@ -581,21 +1155,64 @@ class ComplianceEngine:
                 applicable=False,
             )
 
+        visual = visual_analysis or {}
+        size = visual.get("text_size", {})
+        placement = visual.get("placement", {})
+
+        evidence = {
+            "text_blocks": size.get("text_blocks"),
+            "median_height_px": size.get("median_height_px"),
+            "min_height_px": size.get("min_height_px"),
+            "max_height_px": size.get("max_height_px"),
+            "calibrated_height_mm": size.get("calibrated_height_mm"),
+            "bbox_count": placement.get("bbox_count"),
+        }
+
+        if not visual:
+            reason = (
+                "No visual analysis payload was supplied. OCR can identify text, "
+                "but physical letter/numeral dimensions cannot be proven without "
+                "calibration."
+            )
+        elif size.get("calibrated_height_mm") is not None:
+            reason = (
+                "Calibrated text-height evidence is available. The applicable "
+                "commodity/package threshold still requires verification against "
+                "the Rule 7 requirements."
+            )
+        else:
+            reason = (
+                "OCR bounding boxes provide measurable relative text-size evidence, "
+                "but physical letter/numeral height cannot be proven from pixels alone."
+            )
+
         return self._result(
             "LM-07",
             "7",
             "Principal display panel - area, size and letters",
             "REVIEW",
-            expected="Principal display panel and prescribed letter/numeral dimensions must satisfy the Rule.",
-            reason="Image evidence can identify visible text but cannot reliably establish physical dimensions without a calibrated scale.",
-            suggestion="Verify principal display panel area and prescribed letter/numeral height using a physical measurement/reference.",
+            expected=(
+                "Principal display panel and prescribed letter/numeral "
+                "dimensions must satisfy the Rule."
+            ),
+            extracted=evidence,
+            evidence=[evidence],
+            reason=reason,
+            suggestion=(
+                "Use a calibrated image or physical reference to verify the "
+                "principal-display-panel area and prescribed letter/numeral height."
+            ),
         )
 
     # ==================================================================
     # RULE 8
     # ==================================================================
 
-    def _evaluate_rule_08(self, applicability):
+    def _evaluate_rule_08(
+        self,
+        applicability,
+        visual_analysis=None,
+    ):
 
         if self._is_not_applicable(applicability):
             return self._result(
@@ -606,21 +1223,57 @@ class ComplianceEngine:
                 applicable=False,
             )
 
+        visual = visual_analysis or {}
+        placement = visual.get("placement", {})
+        visibility = visual.get("declaration_visibility", {})
+
+        evidence = {
+            "bbox_count": placement.get("bbox_count"),
+            "regions": placement.get("regions", {}),
+            "label_positions": placement.get("label_positions", []),
+            "declaration_groups": {
+                key: value.get("detected", False)
+                for key, value in visibility.items()
+                if isinstance(value, dict)
+            },
+        }
+
+        detected_groups = sum(
+            1 for value in evidence["declaration_groups"].values() if value
+        )
+
         return self._result(
             "LM-08",
             "8",
             "Declarations where to appear",
             "REVIEW",
-            expected="Required declarations should appear in the prescribed location and principal display panel where applicable.",
-            reason="The system can inspect OCR positions, but definitive legal placement requires package-layout interpretation.",
-            suggestion="Verify declaration placement against the prescribed principal display panel requirements.",
+            expected=(
+                "Required declarations should appear in the prescribed "
+                "location and principal display panel where applicable."
+            ),
+            extracted=evidence,
+            evidence=[evidence],
+            reason=(
+                "OCR geometry now provides relative declaration-position evidence, "
+                "but the Principal Display Panel and complete legal placement "
+                "requirements require package-layout interpretation."
+            ),
+            suggestion=(
+                "Verify applicable declarations against the prescribed location "
+                "and Principal Display Panel requirements."
+            ),
+            weight=1.0,
         )
 
     # ==================================================================
     # RULE 9
     # ==================================================================
 
-    def _evaluate_rule_09(self, applicability):
+    def _evaluate_rule_09(
+        self,
+        applicability,
+        visual_analysis=None,
+    ):
 
         if self._is_not_applicable(applicability):
             return self._result(
@@ -631,14 +1284,54 @@ class ComplianceEngine:
                 applicable=False,
             )
 
+        visual = visual_analysis or {}
+        readability = visual.get("readability", {})
+        size = visual.get("text_size", {})
+
+        evidence = {
+            "mean_ocr_confidence": readability.get("mean_ocr_confidence"),
+            "high_confidence_ratio": readability.get("high_confidence_ratio"),
+            "median_local_contrast": readability.get("median_local_contrast"),
+            "text_blocks": size.get("text_blocks"),
+        }
+
+        confidence = readability.get("mean_ocr_confidence")
+        contrast = readability.get("median_local_contrast")
+
+        if confidence is not None and confidence < 0.60:
+            reason = (
+                "OCR confidence is low, which may indicate blur, glare, obstruction "
+                "or poor visibility. This is a warning signal, not by itself a legal FAIL."
+            )
+        elif contrast is not None:
+            reason = (
+                "OCR confidence and local image contrast provide supporting "
+                "readability evidence, but image-only analysis cannot conclusively "
+                "establish every legibility, prominence and prescribed-manner requirement."
+            )
+        else:
+            reason = (
+                "OCR confidence provides supporting visibility evidence, but image-only "
+                "analysis cannot conclusively establish every legibility, prominence "
+                "and prescribed-manner requirement."
+            )
+
         return self._result(
             "LM-09",
             "9",
             "Manner of declarations",
             "REVIEW",
-            expected="Declarations should be legible, prominent and presented in the prescribed manner.",
-            reason="OCR confirms visible text but image-only evidence cannot conclusively verify every readability and contrast requirement.",
-            suggestion="Verify legibility, prominence, contrast and prescribed language/display requirements.",
+            expected=(
+                "Declarations should be legible, prominent and presented "
+                "in the prescribed manner."
+            ),
+            extracted=evidence,
+            evidence=[evidence],
+            reason=reason,
+            suggestion=(
+                "Verify legibility, prominence, contrast and prescribed "
+                "language/display requirements."
+            ),
         )
 
     # ==================================================================
@@ -683,14 +1376,21 @@ class ComplianceEngine:
                 "LM-10",
                 "10",
                 "Name and address of manufacturer / packer / importer",
-                "PASS",
-                expected="Manufacturer / packer / importer name and address.",
+                "PASS" if evidence else "REVIEW",
+                expected="Manufacturer / packer / importer name and applicable address.",
                 extracted={
                     "name": manufacturer,
                     "address": address,
                 },
                 evidence=evidence,
-                reason="Manufacturer/packer identification and address were detected.",
+                reason=(
+                    "Manufacturer/packer/importer identification and associated address "
+                    "were detected with supporting OCR evidence."
+                    if evidence
+                    else "The identity and address were extracted, but supporting OCR "
+                         "evidence could not be matched reliably."
+                ),
+                suggestion=None if evidence else "Verify the responsible-party declaration visually.",
             )
 
         return self._result(
@@ -717,7 +1417,6 @@ class ComplianceEngine:
         product_data,
         ocr_results,
     ):
-
         if self._is_not_applicable(applicability):
             return self._result(
                 "LM-11",
@@ -729,32 +1428,29 @@ class ComplianceEngine:
 
         quantity = product_data.get("net_quantity")
 
-        if self._valid_value(quantity):
-
-            evidence = self._find_evidence(
-                [quantity],
-                ocr_results,
-            )
-
+        if not self._valid_value(quantity):
             return self._result(
                 "LM-11",
                 "11",
                 "General provisions relating to declaration of quantity",
-                "PASS",
-                expected="Net quantity declaration in the prescribed manner.",
-                extracted=quantity,
-                evidence=evidence,
-                reason="Net quantity declaration was detected.",
+                "REVIEW",
+                expected="Net quantity must be accurately declared in the prescribed manner.",
+                reason="Net quantity declaration was not confidently detected.",
+                suggestion="Capture the complete quantity declaration.",
             )
+
+        evidence = self._find_evidence([quantity], ocr_results)
 
         return self._result(
             "LM-11",
             "11",
             "General provisions relating to declaration of quantity",
             "REVIEW",
-            expected="Net quantity declaration.",
-            reason="Net quantity was not confidently detected.",
-            suggestion="Capture the quantity declaration clearly.",
+            expected="Net quantity must be accurately declared; image analysis alone cannot verify the actual physical quantity.",
+            extracted=quantity,
+            evidence=evidence,
+            reason="The declared quantity is visible, but actual quantity accuracy cannot be established from a label image alone.",
+            suggestion="Verify the physical quantity using an appropriate verified weighing/measuring method.",
         )
 
     # ==================================================================
@@ -767,7 +1463,6 @@ class ComplianceEngine:
         product_data,
         ocr_results,
     ):
-
         if self._is_not_applicable(applicability):
             return self._result(
                 "LM-12",
@@ -778,32 +1473,84 @@ class ComplianceEngine:
             )
 
         quantity = product_data.get("net_quantity")
+        parsed = self._parse_quantity(quantity)
 
-        if not self._valid_value(quantity):
+        if parsed is None:
             return self._result(
                 "LM-12",
                 "12",
                 "Manner in which declaration of quantity shall be made",
                 "REVIEW",
-                expected="Quantity should be declared in the prescribed manner.",
-                reason="Net quantity was not detected, so manner of declaration cannot be fully evaluated.",
-                suggestion="Capture a clearer image of the quantity declaration.",
+                expected="Quantity should be declared using the unit appropriate to the commodity.",
+                extracted=quantity,
+                reason="The quantity/unit could not be parsed reliably.",
+                suggestion="Capture a clearer net quantity declaration.",
             )
 
-        evidence = self._find_evidence(
-            [quantity],
-            ocr_results,
+        amount, unit = parsed
+        unit = unit.lower()
+
+        solid_like = str(
+            product_data.get("category")
+            or product_data.get("product_category")
+            or ""
+        ).lower()
+
+        liquid_hint = any(
+            token in solid_like
+            for token in ["liquid", "beverage", "oil", "juice", "drink", "water"]
         )
+
+        mass_units = {"kg", "g", "gm", "gram", "grams"}
+        volume_units = {"l", "litre", "liter", "litres", "liters", "ml"}
+        count_units = {"number", "no", "nos", "piece", "unit", "pair", "set"}
+
+        length_units = {
+            "m", "cm", "mm", "metre", "meter", "metres", "meters"
+        }
+        area_units = {"m2", "cm2", "sq m", "sq cm"}
+
+        length_hint = any(
+            token in solid_like
+            for token in [
+                "length", "linear", "rope", "wire", "cable",
+                "cloth by metre", "fabric by metre"
+            ]
+        )
+        area_hint = any(
+            token in solid_like
+            for token in ["area", "square metre", "square meter"]
+        )
+
+        if liquid_hint and unit in volume_units:
+            status = "PASS"
+            reason = "The detected liquid-type commodity uses a volume declaration."
+        elif not liquid_hint and unit in mass_units and not length_hint and not area_hint:
+            status = "PASS"
+            reason = "The detected solid/semi-solid commodity uses a mass declaration."
+        elif length_hint and unit in length_units:
+            status = "PASS"
+            reason = "The detected commodity context indicates a length declaration."
+        elif area_hint and unit in area_units:
+            status = "PASS"
+            reason = "The detected commodity context indicates an area declaration."
+        elif unit in count_units:
+            status = "PASS"
+            reason = "The commodity is declared by number/unit/piece."
+        else:
+            status = "REVIEW"
+            reason = "The unit is recognizable, but commodity-specific quantity form could not be verified confidently."
 
         return self._result(
             "LM-12",
             "12",
             "Manner in which declaration of quantity shall be made",
-            "PASS",
-            expected="Quantity declaration is visibly present.",
+            status,
+            expected="Quantity declaration in the appropriate mass, volume, length, area or number form.",
             extracted=quantity,
-            evidence=evidence,
-            reason="A quantity declaration was detected.",
+            evidence=self._find_evidence([quantity], ocr_results),
+            reason=reason,
+            suggestion=None if status == "PASS" else "Verify the quantity form against the commodity and applicable schedule.",
         )
 
     # ==================================================================
@@ -816,7 +1563,6 @@ class ComplianceEngine:
         product_data,
         ocr_results,
     ):
-
         if self._is_not_applicable(applicability):
             return self._result(
                 "LM-13",
@@ -827,76 +1573,56 @@ class ComplianceEngine:
             )
 
         quantity = product_data.get("net_quantity")
+        parsed = self._parse_quantity(quantity)
 
-        if not self._valid_value(quantity):
+        if parsed is None:
             return self._result(
                 "LM-13",
                 "13",
                 "Statement of units of weight, measure or number",
                 "REVIEW",
-                expected="Quantity should use the applicable prescribed unit.",
-                reason="Quantity was not detected.",
-                suggestion="Capture the net quantity and unit clearly.",
-            )
-
-        quantity_text = str(quantity).lower()
-
-        valid_units = [
-            "kg",
-            "g",
-            "gm",
-            "gram",
-            "grams",
-            "mg",
-            "l",
-            "ltr",
-            "litre",
-            "liter",
-            "ml",
-            "millilitre",
-            "milliliter",
-            "m",
-            "cm",
-            "mm",
-            "number",
-            "nos",
-            "no.",
-            "n",
-        ]
-
-        has_unit = any(
-            unit in quantity_text
-            for unit in valid_units
-        )
-
-        evidence = self._find_evidence(
-            [quantity],
-            ocr_results,
-        )
-
-        if has_unit:
-
-            return self._result(
-                "LM-13",
-                "13",
-                "Statement of units of weight, measure or number",
-                "PASS",
-                expected="Applicable prescribed unit of weight, measure or number.",
+                expected="Quantity should use the applicable prescribed SI-based unit form.",
                 extracted=quantity,
-                evidence=evidence,
-                reason="Quantity includes a recognizable unit.",
+                reason="Quantity/unit could not be parsed.",
+                suggestion="Capture the complete quantity and unit.",
             )
+
+        amount, unit = parsed
+        unit = unit.lower()
+
+        # Common acceptable textual variants are retained as REVIEW rather
+        # than hard FAIL because the Department has issued enforcement
+        # guidance around SI notation/case-form variations.
+        standard_units = {
+            "g", "kg", "mg", "ml", "l", "m", "cm", "mm",
+            "number", "piece", "pair", "set", "unit",
+        }
+
+        review_variants = {
+            "gm", "gram", "grams", "ltr", "litre", "liter",
+            "litres", "liters", "no", "nos",
+        }
+
+        if unit in standard_units:
+            status = "PASS"
+            reason = "The quantity uses a recognized prescribed/SI-compatible unit or number/unit form."
+        elif unit in review_variants:
+            status = "REVIEW"
+            reason = "A recognizable unit variant was detected; exact prescribed notation should be verified."
+        else:
+            status = "FAIL"
+            reason = "The detected quantity unit is not a recognized prescribed unit form."
 
         return self._result(
             "LM-13",
             "13",
             "Statement of units of weight, measure or number",
-            "REVIEW",
-            expected="Applicable prescribed unit.",
+            status,
+            expected="Applicable prescribed unit of weight, measure or number.",
             extracted=quantity,
-            evidence=evidence,
-            reason="A quantity was detected but the applicable unit could not be confidently verified.",
-            suggestion="Verify the unit against the applicable commodity requirements.",
+            evidence=self._find_evidence([quantity], ocr_results),
+            reason=reason,
+            suggestion=None if status == "PASS" else "Verify the exact unit notation against the applicable Legal Metrology requirement.",
         )
 
     # ==================================================================
@@ -1057,38 +1783,134 @@ class ComplianceEngine:
         product_data,
         ocr_results,
         expected,
+        label_patterns=None,
     ):
-
         value = product_data.get(field_name)
 
-        if self._valid_value(value):
-
-            evidence = self._find_evidence(
-                [value],
-                ocr_results,
-            )
-
+        if not self._valid_value(value):
             return self._result(
                 rule_id,
                 rule_number,
                 rule_name,
-                "PASS",
+                "REVIEW",
                 expected=expected,
                 extracted=value,
-                evidence=evidence,
-                reason=f"{field_name.replace('_', ' ').title()} was detected in the package information.",
+                reason=f"{field_name.replace('_', ' ').title()} was not confidently detected.",
+                suggestion="Capture a clearer image containing this declaration.",
             )
+
+        if label_patterns:
+            evidence = self._find_labeled_evidence(
+                value,
+                ocr_results,
+                label_patterns,
+            )
+
+            if not evidence:
+                return self._result(
+                    rule_id,
+                    rule_number,
+                    rule_name,
+                    "REVIEW",
+                    expected=expected,
+                    extracted=value,
+                    reason="The value was extracted, but its required declaration label/association could not be confirmed.",
+                    suggestion="Verify the field label and associated value on the package.",
+                )
+        else:
+            evidence = self._find_evidence([value], ocr_results)
 
         return self._result(
             rule_id,
             rule_number,
             rule_name,
-            "REVIEW",
+            "PASS" if evidence else "REVIEW",
             expected=expected,
             extracted=value,
-            reason=f"{field_name.replace('_', ' ').title()} was not confidently detected.",
-            suggestion="Capture a clearer image containing this declaration.",
+            evidence=evidence,
+            reason=(
+                f"{field_name.replace('_', ' ').title()} was detected with supporting OCR evidence."
+                if evidence
+                else f"{field_name.replace('_', ' ').title()} was extracted but could not be matched to OCR evidence."
+            ),
+            suggestion=None if evidence else "Verify the extracted declaration visually.",
         )
+
+    def _find_labeled_evidence(
+        self,
+        value,
+        ocr_results,
+        label_patterns,
+    ):
+        if not self._valid_value(value) or not ocr_results:
+            return []
+
+        normalized_value = self._normalize_text(str(value))
+        labels = [
+            self._normalize_text(label)
+            for label in label_patterns
+            if label
+        ]
+
+        evidence = []
+
+        for index, item in enumerate(ocr_results):
+            if not isinstance(item, dict):
+                continue
+
+            text = str(item.get("text", "")).strip()
+            if not text:
+                continue
+
+            normalized_text = self._normalize_text(text)
+
+            has_value = (
+                normalized_value
+                and (
+                    normalized_value in normalized_text
+                    or normalized_text in normalized_value
+                )
+            )
+
+            has_label = any(label and label in normalized_text for label in labels)
+
+            if has_value and has_label:
+                evidence.append(
+                    {
+                        "text": text,
+                        "confidence": item.get("confidence"),
+                        "bbox": item.get("bbox"),
+                        "match_type": "same_line_label_value",
+                    }
+                )
+                continue
+
+            if has_label:
+                # Look at nearby OCR lines for a value. This handles labels such
+                # as "MRP :" followed by the price on the next OCR line.
+                for nearby in ocr_results[max(0, index - 1): index + 3]:
+                    if not isinstance(nearby, dict):
+                        continue
+
+                    nearby_text = str(nearby.get("text", "")).strip()
+                    nearby_normalized = self._normalize_text(nearby_text)
+
+                    if normalized_value and (
+                        normalized_value in nearby_normalized
+                        or nearby_normalized in normalized_value
+                    ):
+                        evidence.append(
+                            {
+                                "text": nearby_text,
+                                "confidence": nearby.get("confidence"),
+                                "bbox": nearby.get("bbox"),
+                                "match_type": "nearby_label_value",
+                                "label_text": text,
+                            }
+                        )
+                        break
+
+        return evidence
 
     # ==================================================================
     # QUANTITY
@@ -1114,7 +1936,7 @@ class ComplianceEngine:
 
             return self._result(
                 rule_id,
-                "6",
+                "6(1)(c)",
                 "Net quantity",
                 "PASS",
                 expected="Net quantity of the commodity.",
@@ -1125,7 +1947,7 @@ class ComplianceEngine:
 
         return self._result(
             rule_id,
-            "6",
+            "6(1)(c)",
             "Net quantity",
             "REVIEW",
             expected="Net quantity of the commodity.",
@@ -1141,50 +1963,49 @@ class ComplianceEngine:
     def _evaluate_date(
         self,
         rule_id,
+        rule_number,
         rule_name,
         product_data,
         ocr_results,
         fields,
         expected,
     ):
-
         value = None
 
         for field in fields:
-
             candidate = product_data.get(field)
-
             if self._valid_value(candidate):
                 value = candidate
                 break
 
         if self._valid_value(value):
-
-            evidence = self._find_evidence(
-                [value],
-                ocr_results,
-            )
+            evidence = self._find_evidence([value], ocr_results)
 
             return self._result(
                 rule_id,
-                "6",
+                rule_number,
                 rule_name,
-                "PASS",
+                "PASS" if evidence else "REVIEW",
                 expected=expected,
                 extracted=value,
                 evidence=evidence,
-                reason="Relevant date declaration was detected.",
+                reason=(
+                    "Relevant date declaration was detected with OCR evidence."
+                    if evidence
+                    else "A date was extracted but supporting OCR evidence could not be matched reliably."
+                ),
+                suggestion=None if evidence else "Verify the date declaration visually.",
             )
 
         return self._result(
             rule_id,
-            "6",
+            rule_number,
             rule_name,
             "REVIEW",
             expected=expected,
             extracted=None,
             reason="No sufficiently reliable date declaration was detected.",
-            suggestion="Capture the manufacturing/packing or best-before/use-by area clearly.",
+            suggestion="Capture the relevant manufacturing/packing or best-before/use-by area clearly.",
         )
 
     # ==================================================================
@@ -1345,26 +2166,39 @@ class ComplianceEngine:
     def _calculate_overall_status(
         self,
         results,
+        compliance_score: Optional[float] = None,
     ):
+        """
+        Overall status evaluated according to the compliance score:
 
-        has_review = False
+        PASS:
+            Compliance score >= PASS_SCORE_THRESHOLD (80.0%).
 
-        for result in results:
+        REVIEW:
+            Compliance score >= REVIEW_SCORE_THRESHOLD (50.0%) and < PASS_SCORE_THRESHOLD (80.0%).
 
-            status = str(
-                result.get("status", "")
-            ).upper()
+        FAIL:
+            Compliance score < REVIEW_SCORE_THRESHOLD (50.0%).
+        """
+        if compliance_score is None:
+            compliance_score = self._calculate_compliance_score(results)
 
-            if status == "FAIL":
+        if compliance_score is not None:
+            if compliance_score >= self.PASS_SCORE_THRESHOLD:
+                return "PASS"
+            elif compliance_score >= self.REVIEW_SCORE_THRESHOLD:
+                return "REVIEW"
+            else:
                 return "FAIL"
 
-            if status == "REVIEW":
-                has_review = True
+        has_applicable_result = False
+        for result in results:
+            status = str(result.get("status", "")).upper()
+            if status not in self.EXCLUDED_FROM_SCORE:
+                has_applicable_result = True
+                break
 
-        if has_review:
-            return "REVIEW"
-
-        return "PASS"
+        return "PASS" if has_applicable_result else "REVIEW"
 
     # ==================================================================
     # REAL COMPLIANCE SCORE
@@ -1384,7 +2218,11 @@ class ComplianceEngine:
         NOT_APPLICABLE = excluded
         OUT_OF_SCOPE   = excluded
 
-        Each rule has equal weight by default.
+        Each evaluated rule has equal weight by default.
+
+        IMPORTANT:
+        The score is only a prioritization indicator. It must never be used
+        as a substitute for the legal PASS/FAIL/REVIEW decision.
         """
 
         total_weight = 0.0
@@ -1439,6 +2277,187 @@ class ComplianceEngine:
             score,
             1
         )
+
+    # ==================================================================
+    # DYNAMIC COMPLIANCE RULES EVALUATOR
+    # ==================================================================
+
+    def _evaluate_dynamic_rules(
+        self,
+        dynamic_rules: Optional[List[Dict[str, Any]]],
+        product_data: Dict[str, Any],
+        ocr_results: List[Dict[str, Any]],
+        visual_analysis: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        if dynamic_rules is None:
+            try:
+                from .supabase_service import SupabaseService
+                dynamic_rules = SupabaseService.get_active_compliance_rules()
+            except Exception as e:
+                print(f"Notice: Dynamic rules fetch from Supabase skipped: {e}")
+                dynamic_rules = []
+
+        if not dynamic_rules:
+            return []
+
+        from datetime import date, datetime
+        today = date.today()
+
+        full_ocr_text = " ".join(
+            str(item.get("text", "")) for item in ocr_results if isinstance(item, dict)
+        ).lower()
+
+        results = []
+
+        for rule in dynamic_rules:
+            if not isinstance(rule, dict):
+                continue
+
+            # Respect active flag
+            if not rule.get("active", True):
+                continue
+
+            # Respect effective dates
+            eff_from = rule.get("effective_from")
+            if eff_from:
+                try:
+                    if isinstance(eff_from, str):
+                        eff_from = datetime.strptime(eff_from[:10], "%Y-%m-%d").date()
+                    if today < eff_from:
+                        continue
+                except Exception:
+                    pass
+
+            eff_to = rule.get("effective_to")
+            if eff_to:
+                try:
+                    if isinstance(eff_to, str):
+                        eff_to = datetime.strptime(eff_to[:10], "%Y-%m-%d").date()
+                    if today > eff_to:
+                        continue
+                except Exception:
+                    pass
+
+            rule_code = rule.get("rule_code") or f"DR-{rule.get('id', '')[:6]}"
+            rule_name = rule.get("rule_name") or "Dynamic Regulatory Rule"
+            category = rule.get("category") or "GENERAL"
+            field_name = (rule.get("field_name") or "").strip().lower()
+            condition_type = (rule.get("condition_type") or "field_presence").strip().lower()
+            operator = (rule.get("operator") or "exists").strip().lower()
+            expected_val = str(rule.get("expected_value") or "").strip()
+            severity = str(rule.get("severity", "MEDIUM")).upper()
+            mandatory = bool(rule.get("mandatory", True))
+
+            # Extract value from product_data or OCR
+            extracted_val = None
+            evidence = []
+
+            # 1. Check direct product_data field
+            if field_name:
+                for k, v in product_data.items():
+                    if k.lower() == field_name or field_name in k.lower():
+                        if v:
+                            extracted_val = v
+                            break
+
+            # 2. Check OCR evidence if not found in product_data
+            if not extracted_val and field_name:
+                for block in ocr_results:
+                    txt = str(block.get("text", ""))
+                    if field_name.replace("_", " ") in txt.lower():
+                        extracted_val = txt
+                        evidence.append(block)
+                        break
+
+            # If still nothing, check if expected value appears in full OCR
+            if not extracted_val and expected_val and expected_val.lower() in full_ocr_text:
+                extracted_val = expected_val
+                for block in ocr_results:
+                    if expected_val.lower() in str(block.get("text", "")).lower():
+                        evidence.append(block)
+
+            # Evaluate condition
+            status = "REVIEW"
+            reason = ""
+            suggestion = ""
+
+            if condition_type in ("field_presence", "presence", "mandatory_field"):
+                if extracted_val and str(extracted_val).strip() and str(extracted_val).strip().lower() not in ("none", "null"):
+                    status = "PASS"
+                    reason = f"Mandatory declaration '{field_name or rule_name}' was detected on label."
+                else:
+                    status = "FAIL" if mandatory else "REVIEW"
+                    reason = f"Required statutory declaration '{field_name or rule_name}' was missing or could not be detected."
+                    suggestion = f"Ensure '{field_name or rule_name}' is legibly displayed on principal display panel."
+
+            elif condition_type in ("field_contains", "contains") or operator == "contains":
+                if extracted_val and expected_val and expected_val.lower() in str(extracted_val).lower():
+                    status = "PASS"
+                    reason = f"Declaration satisfies requirement; contained expected text '{expected_val}'."
+                elif expected_val and expected_val.lower() in full_ocr_text:
+                    status = "PASS"
+                    reason = f"Expected text '{expected_val}' was verified in label text."
+                else:
+                    status = "FAIL" if mandatory else "REVIEW"
+                    reason = f"Declaration did not contain expected content '{expected_val}'."
+                    suggestion = f"Verify package text contains '{expected_val}'."
+
+            elif condition_type in ("equals", "match") or operator in ("equals", "=="):
+                if extracted_val and expected_val and str(extracted_val).strip().lower() == expected_val.lower():
+                    status = "PASS"
+                    reason = f"Declaration matches required value '{expected_val}'."
+                else:
+                    status = "FAIL" if mandatory else "REVIEW"
+                    reason = f"Expected '{expected_val}', but detected '{extracted_val}'."
+                    suggestion = f"Update label to reflect required value '{expected_val}'."
+
+            elif condition_type in ("regex", "regex_match") or operator in ("regex", "matches"):
+                try:
+                    pattern = re.compile(expected_val, re.IGNORECASE)
+                    if (extracted_val and pattern.search(str(extracted_val))) or pattern.search(full_ocr_text):
+                        status = "PASS"
+                        reason = f"Label evidence matches regulatory pattern '{expected_val}'."
+                    else:
+                        status = "FAIL" if mandatory else "REVIEW"
+                        reason = f"Pattern '{expected_val}' not matched in label evidence."
+                        suggestion = f"Check format requirements for '{rule_name}'."
+                except Exception as ex:
+                    status = "REVIEW"
+                    reason = f"Regex validation error: {ex}"
+
+            else:
+                # Default fallback evaluation
+                if extracted_val:
+                    status = "PASS"
+                    reason = f"Declaration detected for rule '{rule_name}'."
+                else:
+                    status = "FAIL" if mandatory else "REVIEW"
+                    reason = f"Statutory declaration for '{rule_name}' not detected."
+                    suggestion = f"Ensure '{rule_name}' compliance on package."
+
+            weight = 1.5 if severity == "CRITICAL" else (1.2 if severity == "HIGH" else 1.0)
+
+            results.append({
+                "rule_id": rule_code,
+                "rule_number": rule_code,
+                "rule_name": rule_name,
+                "status": status,
+                "applicable": True,
+                "expected": expected_val or rule.get("description") or f"Statutory declaration for {rule_name}",
+                "extracted": str(extracted_val) if extracted_val is not None else None,
+                "extracted_value": str(extracted_val) if extracted_val is not None else None,
+                "evidence": evidence,
+                "reason": reason,
+                "suggestion": suggestion,
+                "rule_reference": f"Legal Metrology Rule [{rule_code}] — {rule_name}",
+                "source": "Dynamic Regulatory Rule Registry (Supabase)",
+                "severity": severity,
+                "mandatory": mandatory,
+                "category": category,
+                "weight": weight,
+            })
+
+        return results
 
 
 # ======================================================================

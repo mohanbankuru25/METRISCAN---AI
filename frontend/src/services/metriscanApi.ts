@@ -20,7 +20,7 @@ export async function processOCR(file: File): Promise<OCRResponse> {
     handle_file(file),
   ]);
 
-  const data = result.data?.[0];
+  const data = (result.data as unknown as any[])?.[0];
 
   if (!data) {
     throw new Error("Metriscan AI returned an empty result.");

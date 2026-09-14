@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageContainer } from "../components/layout/PageContainer";
 import { historyService } from "../services/historyService";
+import { reportService } from "../services/reportService";
 import type { ScanHistoryItem, ScanFilterOptions } from "../types/history";
-import { History as HistoryIcon, Search, Filter, Eye, Trash2, ArrowUpDown, Plus } from "lucide-react";
+import { History as HistoryIcon, Search, Filter, Eye, ArrowUpDown, Plus, FileText } from "lucide-react";
 
 export function History() {
   const navigate = useNavigate();
@@ -15,23 +16,23 @@ export function History() {
     categoryFilter: "ALL",
     sortBy: "newest",
   });
+  const [loading, setLoading] = useState(true);
 
-  const loadData = () => {
-    const filtered = historyService.filterScans(filters);
-    setScans(filtered);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const filtered = await historyService.getScans(filters);
+      setScans(filtered);
+    } catch (err) {
+      console.error("Failed to load inspection history:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadData();
   }, [filters]);
-
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this scan record?")) {
-      historyService.deleteScan(id);
-      loadData();
-    }
-  };
 
   const getStatusBadge = (status: string) => {
     const s = String(status).toUpperCase();
@@ -157,7 +158,12 @@ export function History() {
 
         {/* History Table */}
         <div className="panel-card">
-          {scans.length === 0 ? (
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "3rem 1rem", color: "#64748b" }}>
+              <HistoryIcon size={36} color="#2563eb" className="spin-animate" style={{ margin: "0 auto 0.75rem" }} />
+              <p style={{ margin: 0, fontWeight: 600 }}>Loading inspection history from Supabase...</p>
+            </div>
+          ) : scans.length === 0 ? (
             <div style={{ textAlign: "center", padding: "3rem 1rem", color: "#64748b" }}>
               <HistoryIcon size={36} color="#cbd5e1" style={{ marginBottom: "0.75rem" }} />
               <h3 style={{ fontSize: "1.1rem", color: "#334155" }}>No Scan Records Found</h3>
@@ -188,7 +194,20 @@ export function History() {
                       onClick={() => navigate(`/history/${scan.id}`)}
                       style={{ cursor: "pointer" }}
                     >
-                      <td style={{ fontWeight: 700, color: "#0f172a" }}>{scan.productName}</td>
+                      <td>
+                        <div style={{ fontWeight: 700, color: "#0f172a" }}>{scan.productName}</div>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", marginTop: "0.2rem" }}>
+                          {scan.scanType === "MULTI_SCAN" ? (
+                            <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0" }}>
+                              Multi-Scan
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: "0.68rem", fontWeight: 600, padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "#f1f5f9", color: "#475569" }}>
+                              Single Scan
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td style={{ color: "#64748b" }}>{scan.category}</td>
                       <td style={{ fontSize: "0.8rem", color: "#64748b" }}>
                         {new Date(scan.timestamp).toLocaleString("en-IN", {
@@ -202,24 +221,46 @@ export function History() {
                       <td style={{ fontWeight: 800, color: "#0f172a" }}>{scan.score}%</td>
                       <td>{getStatusBadge(scan.status)}</td>
                       <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "0.35rem" }}>
                           <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/history/${scan.id}`); }}
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: "0.25rem 0.5rem" }}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await reportService.viewReportPdf(scan.id);
+                              } catch (err: any) {
+                                alert(err.message || "Failed to open PDF report.");
+                              }
+                            }}
+                            className="btn btn-blue btn-sm"
+                            style={{ padding: "0.25rem 0.6rem", fontSize: "0.78rem" }}
+                            title="Open official PDF inspection report in browser"
                           >
                             <Eye size={13} />
                             <span>View Report</span>
                           </button>
                           <button
-                            onClick={(e) => handleDelete(scan.id, e)}
-                            className="btn btn-danger btn-sm"
-                            style={{ padding: "0.25rem 0.5rem" }}
-                            title="Delete scan"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await reportService.downloadStoredReport(scan.id, "docx");
+                              } catch (err: any) {
+                                alert(err.message || "Failed to download DOCX report.");
+                              }
+                            }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: "0.25rem 0.5rem", fontSize: "0.78rem" }}
+                            title="Download editable DOCX report"
                           >
-                            <Trash2 size={13} />
+                            <FileText size={13} />
+                            <span>DOCX</span>
                           </button>
-                        </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/history/${scan.id}`); }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: "0.25rem 0.5rem", fontSize: "0.78rem" }}
+                            title="View complete inspection dossier & audit evidence"
+                          >
+                            <span>Dossier</span>
+                          </button>
                       </td>
                     </tr>
                   ))}

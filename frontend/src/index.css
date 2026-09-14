@@ -78,6 +78,7 @@ html, body {
 
 #root {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   width: 100%;
 }
@@ -367,3 +368,649 @@ a:hover { text-decoration: underline; }
     padding: 1rem;
   }
 }
+
+/* ==========================================================================
+   LANDING PAGE STYLES
+   ========================================================================== */
+
+.landing-page {
+  min-height: 100vh;
+  background-color: #ffffff;
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Landing Top Navigation */
+.landing-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.landing-nav-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0.9rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-decoration: none;
+}
+
+.landing-brand:hover {
+  text-decoration: none;
+}
+
+.brand-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background-color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.2);
+}
+
+.brand-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.brand-subtitle {
+  font-size: 0.725rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.landing-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.landing-nav-link {
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.15s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.4rem 0.2rem;
+}
+
+.landing-nav-link:hover {
+  color: #0f172a;
+  text-decoration: none;
+}
+
+/* Landing Hero Section */
+.landing-hero {
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4rem 1.5rem 3.5rem;
+  text-align: center;
+}
+
+.hero-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gov-official-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 9999px;
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+}
+
+.hero-heading {
+  font-size: 2.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.75rem;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2563eb;
+  margin-bottom: 1rem;
+}
+
+.hero-description {
+  font-size: 1.05rem;
+  color: #475569;
+  max-width: 720px;
+  line-height: 1.6;
+  margin: 0 auto 2rem;
+}
+
+/* Workflow Step Pipeline */
+.workflow-pipeline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding: 0.85rem 1.25rem;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.workflow-node {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.workflow-node-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  font-size: 0.725rem;
+  font-weight: 800;
+}
+
+.workflow-separator {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+/* Role Cards Section */
+.role-cards-section {
+  padding: 3.5rem 1.5rem;
+  max-width: 1140px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.section-intro-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.section-intro-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.5rem;
+}
+
+.section-intro-desc {
+  font-size: 0.95rem;
+  color: #64748b;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.role-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: stretch;
+}
+
+.role-portal-card {
+  background-color: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 2.25rem;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+}
+
+.role-portal-card:hover {
+  border-color: #2563eb;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.08);
+}
+
+.role-portal-card.admin-card:hover {
+  border-color: #1d4ed8;
+}
+
+.role-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.role-card-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.role-card-icon.inspector {
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.role-card-icon.admin {
+  background-color: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.role-card-title-wrap h3 {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.2rem;
+}
+
+.role-card-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  background-color: #f1f5f9;
+  color: #475569;
+}
+
+.role-card-desc {
+  font-size: 0.925rem;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+  flex-grow: 0;
+}
+
+.role-card-features-title {
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.role-card-features-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex-grow: 1;
+}
+
+.role-card-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.role-card-feature-check {
+  color: #059669;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.role-card-btn {
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.role-card-btn.inspector {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.role-card-btn.inspector:hover {
+  background-color: #1d4ed8;
+  text-decoration: none;
+}
+
+.role-card-btn.admin {
+  background-color: #0f172a;
+  color: #ffffff;
+}
+
+.role-card-btn.admin:hover {
+  background-color: #1e293b;
+  text-decoration: none;
+}
+
+/* Feature Pillars ("Why METRIScan?") */
+.why-section {
+  background-color: #f8fafc;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4rem 1.5rem;
+}
+
+.why-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.pillar-card {
+  background-color: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pillar-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background-color: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pillar-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pillar-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+/* How It Works Section */
+.how-it-works-section {
+  padding: 4rem 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+}
+
+.step-card {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1.75rem 1.5rem;
+  background-color: #ffffff;
+  position: relative;
+}
+
+.step-badge {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #2563eb;
+  background-color: #eff6ff;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  display: inline-block;
+  margin-bottom: 0.85rem;
+  font-family: var(--font-mono);
+}
+
+.step-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.4rem;
+}
+
+.step-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+/* Regulatory Banner */
+.regulatory-framework-banner {
+  background-color: #0f172a;
+  color: #ffffff;
+  padding: 3.5rem 1.5rem;
+  border-top: 1px solid var(--gov-navy-800);
+}
+
+.regulatory-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.regulatory-content h3 {
+  color: #ffffff;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.regulatory-content p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  max-width: 650px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.regulatory-cta-group {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+/* Landing Footer */
+.landing-footer {
+  background-color: #0b1329;
+  color: #94a3b8;
+  padding: 3rem 1.5rem 1.5rem;
+  border-top: 1px solid #1e293b;
+  margin-top: auto;
+}
+
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 2.5rem;
+  margin-bottom: 2rem;
+}
+
+.footer-brand-title {
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+}
+
+.footer-brand-desc {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  max-width: 460px;
+}
+
+.footer-col h4 {
+  color: #ffffff;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.85rem;
+}
+
+.footer-col-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.footer-col-links a, .footer-col-links button {
+  color: #94a3b8;
+  font-size: 0.825rem;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.footer-col-links a:hover, .footer-col-links button:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.footer-bottom-bar {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-top: 1.5rem;
+  border-top: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.775rem;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   ADMIN & INSPECTOR DASHBOARD COMPONENTS
+   ========================================================================== */
+
+.progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background-color: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: flex;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* Responsive queries */
+@media (max-width: 900px) {
+  .role-cards-grid {
+    grid-template-columns: 1fr;
+    max-width: 580px;
+    margin: 0 auto;
+  }
+  
+  .hero-heading {
+    font-size: 2.15rem;
+  }
+
+  .footer-inner {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-heading {
+    font-size: 1.75rem;
+  }
+
+  .hero-subtitle {
+    font-size: 1.05rem;
+  }
+
+  .landing-nav-links {
+    gap: 0.75rem;
+  }
+
+  .landing-nav-link {
+    font-size: 0.8rem;
+  }
+}
+

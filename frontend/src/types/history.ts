@@ -10,6 +10,8 @@ export interface ScanHistoryItem {
   filename: string;
   previewUrl?: string;
   fullData: OCRComplianceResponse;
+  scanType?: "SINGLE_SCAN" | "MULTI_SCAN" | string;
+  multiScanSessionId?: string;
 }
 
 export interface ScanFilterOptions {

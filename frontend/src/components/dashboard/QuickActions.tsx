@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Camera, Upload, History, Zap } from "lucide-react";
+import { Camera, Upload, History, Zap, Layers } from "lucide-react";
 
 export function QuickActions() {
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ export function QuickActions() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.85rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.85rem" }}>
         <button
           onClick={() => navigate("/scanner", { state: { mode: "camera" } })}
           className="btn btn-primary"
@@ -30,6 +30,15 @@ export function QuickActions() {
         >
           <Upload size={22} />
           <span>Upload Package Image</span>
+        </button>
+
+        <button
+          onClick={() => navigate("/inspector/multi-scan")}
+          className="btn btn-secondary"
+          style={{ flexDirection: "column", padding: "1.1rem 0.75rem", gap: "0.5rem", borderColor: "#3b82f6", color: "#1d4ed8" }}
+        >
+          <Layers size={22} color="#2563eb" />
+          <span>Multi-Scan Products</span>
         </button>
 
         <button

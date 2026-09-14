@@ -6,7 +6,11 @@ class ApplicabilityEngine:
     """
     Phase 2.2
     Legal Metrology (Packaged Commodities) Rules, 2011
-    Original 2011 baseline.
+    Consolidated compliance applicability baseline.
+
+    This engine is aligned to the current rule structure used by the
+    compliance engine. Rule 5 is treated as omitted, and Rule 6(11)
+    unit-sale-price applicability is included.
 
     This engine determines whether a rule is applicable.
     It does NOT determine legal PASS/FAIL.
@@ -102,52 +106,146 @@ class ApplicabilityEngine:
         # --------------------------------------------------
         # RULE 5
         # --------------------------------------------------
-
-        if chapter_ii:
-            rules.append(
-                self._result(
-                    "LM-05",
-                    "5",
-                    "REVIEW",
-                    True,
-                    (
-                        "Rule 5 depends on whether the commodity is "
-                        "one of the commodities specified in the "
-                        "Second Schedule. Commodity-specific "
-                        "classification is required."
-                    ),
-                    (
-                        [product_data["product_name"]]
-                        if product_data.get("product_name")
-                        else []
-                    ),
-                    "CONDITIONAL",
-                )
+        # Rule 5 was omitted by amendment. It must not be treated as an
+        # active Second-Schedule package-quantity requirement.
+        rules.append(
+            self._result(
+                "LM-05",
+                "5",
+                "OMITTED",
+                False,
+                "Rule 5 has been omitted; the former Second Schedule package-quantity requirement is not an active applicability check.",
+                [],
+                "OUT_OF_SCOPE",
             )
-        else:
+        )
+
+        # --------------------------------------------------
+        # RULE 6 — declaration applicability
+        # --------------------------------------------------
+        # Keep Rule 6 as separate declaration-level applicability results
+        # so the compliance engine can distinguish unconditional,
+        # conditional and evidence-limited checks.
+        rule6_items = [
+            (
+                "LM-06A",
+                "6(1)(a)",
+                "Manufacturer/packer/importer name and address",
+                True,
+                "The responsible entity name and complete address are required for a covered retail package, subject to the rule's stated exceptions.",
+            ),
+            (
+                "LM-06B",
+                "6(1)(aa)",
+                "Country of origin for imported goods",
+                package_context["imported_package"],
+                (
+                    "Imported-package evidence was detected; country of origin is applicable."
+                    if package_context["imported_package"]
+                    else "No reliable imported-package evidence was detected."
+                ),
+            ),
+            (
+                "LM-06C",
+                "6(1)(b)",
+                "Common or generic name of the commodity",
+                True,
+                "The package should identify the commodity by its common or generic name.",
+            ),
+            (
+                "LM-06D",
+                "6(1)(c)",
+                "Net quantity",
+                True,
+                "Net quantity is applicable to the covered pre-packaged commodity.",
+            ),
+            (
+                "LM-06E",
+                "6(1)(d)",
+                "Month and year of manufacture/pre-packing/import",
+                True,
+                "Date declaration is applicable, subject to food-sector and other-law exceptions.",
+            ),
+            (
+                "LM-06F",
+                "6(1)(da)",
+                "Best before/use by",
+                package_context["time_sensitive_product"],
+                (
+                    "The commodity appears time-sensitive; best-before/use-by applicability is triggered."
+                    if package_context["time_sensitive_product"]
+                    else "No reliable evidence was found that a best-before/use-by declaration is specifically triggered."
+                ),
+            ),
+            (
+                "LM-06G",
+                "6(1)(e)",
+                "Maximum retail sale price",
+                True,
+                "Retail sale price/MRP is applicable to a covered retail package, subject to statutory exceptions.",
+            ),
+            (
+                "LM-06H",
+                "6(1)(f)",
+                "Dimensions where applicable",
+                package_context["dimension_declaration_context"],
+                (
+                    "Commodity/category evidence indicates that dimension declaration may apply."
+                    if package_context["dimension_declaration_context"]
+                    else "No commodity-specific dimension evidence was detected."
+                ),
+            ),
+            (
+                "LM-06I",
+                "6(2)",
+                "Consumer complaint contact details",
+                True,
+                "Consumer-care contact information is applicable where required by the rule.",
+            ),
+            (
+                "LM-06J",
+                "6(11)",
+                "Unit sale price",
+                package_context["unit_sale_price_applicable"],
+                (
+                    "Unit sale price is applicable under Rule 6(11) for the detected quantity/unit context."
+                    if package_context["unit_sale_price_applicable"]
+                    else "Unit sale price is not required where the detected MRP and unit-sale-price conditions make the declaration unnecessary or applicability cannot be triggered."
+                ),
+            ),
+        ]
+
+        for rule_id, rule_number, rule_name, applicable, reason in rule6_items:
+            if not chapter_ii:
+                status = "NOT_APPLICABLE"
+                applicable_value = False
+                final_reason = "Chapter II does not apply to this package."
+            elif applicable:
+                status = "APPLICABLE"
+                applicable_value = True
+                final_reason = reason
+            else:
+                status = "NOT_APPLICABLE"
+                applicable_value = False
+                final_reason = reason
+
             rules.append(
                 self._result(
-                    "LM-05",
-                    "5",
-                    "NOT_APPLICABLE",
-                    False,
-                    "Chapter II does not apply to this package.",
-                    [],
-                    "CONDITIONAL",
+                    rule_id,
+                    rule_number,
+                    status,
+                    applicable_value,
+                    final_reason,
+                    package_context["chapter_ii_evidence"],
+                    "AUTOMATED" if rule_number in ("6(1)(b)", "6(1)(c)", "6(1)(e)") else "CONDITIONAL",
                 )
             )
 
         # --------------------------------------------------
-        # RULES 6-13
+        # RULES 7-13
         # --------------------------------------------------
 
         core_rules = [
-            (
-                "LM-06",
-                "6",
-                "Declarations to be made on every package",
-                "AUTOMATED",
-            ),
             (
                 "LM-07",
                 "7",
@@ -176,7 +274,7 @@ class ApplicabilityEngine:
                 "LM-11",
                 "11",
                 "General provisions relating to declaration of quantity",
-                "AUTOMATED",
+                "REVIEW",
             ),
             (
                 "LM-12",
@@ -193,7 +291,6 @@ class ApplicabilityEngine:
         ]
 
         for rule_id, rule_number, rule_name, automation in core_rules:
-
             rules.append(
                 self._result(
                     rule_id,
@@ -586,7 +683,7 @@ class ApplicabilityEngine:
 
         return {
             "engine": "Legal Metrology Applicability Engine",
-            "version": "2011-original",
+            "version": "consolidated-2011-rules-with-amendments",
             "rules_evaluated": len(rules),
             "package_context": package_context,
             "summary": summary,
@@ -621,6 +718,16 @@ class ApplicabilityEngine:
 
         quantity_value, quantity_unit = self._parse_quantity(
             product_data.get("net_quantity")
+        )
+
+        imported_package = self._is_imported_package(product_data, full_text, context)
+        time_sensitive_product = self._is_time_sensitive_product(product_data, full_text)
+        dimension_declaration_context = self._dimension_declaration_context(full_text)
+        unit_sale_price_applicable = self._unit_sale_price_context(
+            product_data,
+            quantity_value,
+            quantity_unit,
+            retail,
         )
 
         cement_or_fertilizer = self._contains_any(
@@ -814,7 +921,126 @@ class ApplicabilityEngine:
                 "product_category"
             ),
             "cement_or_fertilizer": cement_or_fertilizer,
+            "imported_package": imported_package,
+            "time_sensitive_product": time_sensitive_product,
+            "dimension_declaration_context": dimension_declaration_context,
+            "unit_sale_price_applicable": unit_sale_price_applicable,
         }
+
+    # ======================================================
+    # RULE 6 APPLICABILITY HELPERS
+    # ======================================================
+
+    def _is_imported_package(
+        self,
+        product_data: Dict[str, Any],
+        text: str,
+        context: Dict[str, Any],
+    ) -> bool:
+        explicit = self._explicit_bool(context, "imported_package")
+        if explicit is not None:
+            return explicit
+
+        origin = product_data.get("country_of_origin")
+        imported_markers = (
+            "imported",
+            "importer",
+            "country of origin",
+            "made in ",
+            "manufactured in ",
+            "assembled in ",
+        )
+        if origin:
+            return True
+        return self._contains_any(text, list(imported_markers))
+
+    def _is_time_sensitive_product(
+        self,
+        product_data: Dict[str, Any],
+        text: str,
+    ) -> bool:
+        if product_data.get("best_before") or product_data.get("use_by"):
+            return True
+
+        keywords = (
+            "food",
+            "fruit",
+            "vegetable",
+            "juice",
+            "milk",
+            "dairy",
+            "meat",
+            "fish",
+            "bakery",
+            "snack",
+            "beverage",
+            "medicine",
+            "cosmetic",
+            "perishable",
+            "expiry",
+            "expiration",
+            "best before",
+            "use by",
+        )
+        return self._contains_any(text, list(keywords))
+
+    def _dimension_declaration_context(self, text: str) -> bool:
+        return self._contains_any(
+            text,
+            [
+                "length",
+                "width",
+                "height",
+                "dimension",
+                "dimensions",
+                "area",
+                "bedsheet",
+                "bed sheet",
+                "fabric",
+                "dhoti",
+                "saree",
+                "sari",
+                "napkin",
+                "pillow cover",
+                "towel",
+                "table cloth",
+                "tablecloth",
+            ],
+        )
+
+    def _unit_sale_price_context(
+        self,
+        product_data: Dict[str, Any],
+        quantity_value: Optional[float],
+        quantity_unit: Optional[str],
+        retail: Optional[bool],
+    ) -> bool:
+        if retail is False:
+            return False
+
+        # If MRP and USP are explicitly equal, Rule 6(11) does not
+        # require a separate unit-sale-price declaration.
+        mrp = str(product_data.get("mrp") or "").strip()
+        usp = str(
+            product_data.get("unit_sale_price")
+            or product_data.get("unit_price")
+            or ""
+        ).strip()
+
+        if mrp and usp:
+            mrp_num = re.search(r"(\d+(?:\.\d+)?)", mrp.replace(",", ""))
+            usp_num = re.search(r"(\d+(?:\.\d+)?)", usp.replace(",", ""))
+            if mrp_num and usp_num:
+                try:
+                    if abs(float(mrp_num.group(1)) - float(usp_num.group(1))) < 0.005:
+                        return False
+                except ValueError:
+                    pass
+
+        # A parsed retail quantity gives enough evidence to trigger the
+        # unit-sale-price check. Physical correctness remains for review
+        # in the compliance engine.
+        return quantity_value is not None and quantity_unit in ("kg", "litre")
 
     # ======================================================
     # RULE 14

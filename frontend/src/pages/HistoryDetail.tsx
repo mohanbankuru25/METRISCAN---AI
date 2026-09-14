@@ -9,7 +9,8 @@ import { AIStatus } from "../components/scanner/AIStatus";
 import { historyService } from "../services/historyService";
 import type { ScanHistoryItem } from "../types/history";
 import type { ComplianceRuleResult } from "../types/compliance";
-import { ArrowLeft, Printer, Download, Calendar, Scale, Cpu, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Printer, Download, Calendar, Scale, Cpu, ChevronDown, ChevronUp, FileText, Loader2, Eye } from "lucide-react";
+import { downloadReportPdf, downloadReportDocx, viewReportPdf } from "../services/reportService";
 
 export function HistoryDetail() {
   const { id } = useParams<{ id: string }>();
@@ -17,36 +18,64 @@ export function HistoryDetail() {
   const [scan, setScan] = useState<ScanHistoryItem | null>(null);
   const [selectedRule, setSelectedRule] = useState<ComplianceRuleResult | null>(null);
   const [showTechDetails, setShowTechDetails] = useState<boolean>(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<boolean>(false);
+  const [downloadingDocx, setDownloadingDocx] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (id) {
-      const item = historyService.getScanById(id);
-      if (item) {
+    async function loadItem() {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const item = await historyService.getScanById(id);
         setScan(item);
+      } catch (err) {
+        console.error("Failed to load inspection by ID:", err);
+      } finally {
+        setLoading(false);
       }
     }
+    loadItem();
   }, [id]);
+
+  if (loading) {
+    return (
+      <PageContainer>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "5rem 1rem", gap: "1rem" }}>
+          <Loader2 size={36} className="spin-animate" color="#1e3a8a" />
+          <span style={{ fontSize: "0.9rem", color: "#64748b" }}>Loading inspection dossier from Supabase...</span>
+        </div>
+      </PageContainer>
+    );
+  }
 
   if (!scan) {
     return (
       <PageContainer>
-        <div className="panel-card" style={{ textAlign: "center", padding: "3rem" }}>
-          <Scale size={32} color="#94a3b8" style={{ marginBottom: "1rem" }} />
+        <div style={{ textAlign: "center", padding: "4rem 1rem" }}>
+          <Scale size={48} color="#94a3b8" style={{ margin: "0 auto 1rem" }} />
           <h3>Inspection Report Not Found</h3>
-          <p style={{ margin: "0.5rem 0 1.5rem" }}>The requested scan record could not be found or may have been deleted.</p>
-          <button onClick={() => navigate("/history")} className="btn btn-primary">
-            <ArrowLeft size={16} />
-            <span>Return to History</span>
+          <p style={{ color: "#64748b", margin: "0.5rem 0 1.5rem" }}>
+            The requested scan report could not be found in Supabase or you do not have permission to view it.
+          </p>
+          <button onClick={() => navigate("/history")} className="btn btn-primary btn-sm">
+            Return to Inspection History
           </button>
         </div>
       </PageContainer>
     );
   }
 
-  const fullData = scan.fullData;
+  const fullData = scan.fullData || {};
   const productData = fullData.product_data || fullData.paddle_data || fullData.gemini_data || null;
-  const compliance = fullData.compliance || null;
-  const rules = Array.isArray(compliance?.results) ? compliance.results : [];
+  const compliance = fullData.compliance || {
+    overall_status: scan.status,
+    score: scan.score,
+    results: []
+  };
+
+  const rules = compliance.results || [];
+
   const processedUrl = fullData.processed_image
     ? `http://127.0.0.1:8000/${fullData.processed_image.replace(/\\/g, "/")}`
     : undefined;
@@ -55,6 +84,30 @@ export function HistoryDetail() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!scan) return;
+    try {
+      setDownloadingPdf(true);
+      await downloadReportPdf(scan, `Compliance_Report_${scan.id || "inspection"}.pdf`);
+    } catch (err: any) {
+      alert(err.message || "Failed to download PDF report");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadDocx = async () => {
+    if (!scan) return;
+    try {
+      setDownloadingDocx(true);
+      await downloadReportDocx(scan, `Compliance_Report_${scan.id || "inspection"}.docx`);
+    } catch (err: any) {
+      alert(err.message || "Failed to download DOCX report");
+    } finally {
+      setDownloadingDocx(false);
+    }
   };
 
   return (
@@ -67,14 +120,45 @@ export function HistoryDetail() {
             <span>Back to History</span>
           </button>
 
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button onClick={handlePrint} className="btn btn-secondary btn-sm">
-              <Printer size={15} />
-              <span>Print Inspection Report</span>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              onClick={async () => {
+                if (!scan) return;
+                try {
+                  await viewReportPdf(scan.id);
+                } catch (err: any) {
+                  alert(err.message || "Failed to open PDF report.");
+                }
+              }}
+              className="btn btn-secondary btn-sm"
+              title="Open certified PDF compliance report directly in browser tab"
+            >
+              <Eye size={15} color="#2563eb" />
+              <span>View Official PDF</span>
             </button>
-            <button onClick={handlePrint} className="btn btn-blue btn-sm">
-              <Download size={15} />
-              <span>Export PDF Report</span>
+            <button onClick={handlePrint} className="btn btn-secondary btn-sm" title="Print browser view">
+              <Printer size={15} />
+              <span>Print View</span>
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf}
+              className="btn btn-blue btn-sm"
+              style={{ backgroundColor: "#2563eb", color: "#ffffff" }}
+              title="Download official print-ready PDF compliance report"
+            >
+              {downloadingPdf ? <Loader2 size={15} className="spin" /> : <Download size={15} />}
+              <span>{downloadingPdf ? "Generating PDF..." : "Export PDF Report"}</span>
+            </button>
+            <button
+              onClick={handleDownloadDocx}
+              disabled={downloadingDocx}
+              className="btn btn-secondary btn-sm"
+              style={{ backgroundColor: "#0284c7", color: "#ffffff", borderColor: "#0284c7" }}
+              title="Download editable Microsoft Word inspection report"
+            >
+              {downloadingDocx ? <Loader2 size={15} className="spin" /> : <FileText size={15} />}
+              <span>{downloadingDocx ? "Generating DOCX..." : "Export Editable DOCX"}</span>
             </button>
           </div>
         </div>
