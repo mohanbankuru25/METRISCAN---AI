@@ -1,9 +1,12 @@
- import type { OCRResponse, ProductData, OCRDetail } from "../types/ocr";
+import type { OCRResponse, ProductData, OCRDetail } from "../types/ocr";
 
 export type { ProductData, OCRDetail, OCRResponse };
 
-// Local FastAPI backend
-const BACKEND_URL = "http://127.0.0.1:8000";
+// FastAPI backend
+const BACKEND_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+import { authService } from "./authService";
 
 // ---------------------------------------------------------
 // Backend health check
@@ -34,8 +37,6 @@ export async function checkBackendHealth(): Promise<{
   }
 }
 
-import { authService } from "./authService";
-
 // ---------------------------------------------------------
 // Process packaged commodity image through Metriscan OCR
 // pipeline
@@ -47,6 +48,7 @@ export async function processOCR(file: File): Promise<OCRResponse> {
 
   const headers: Record<string, string> = {};
   const token = authService.getToken();
+
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
