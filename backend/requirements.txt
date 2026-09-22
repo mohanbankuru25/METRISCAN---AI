@@ -10,8 +10,6 @@ paddleocr==3.7.0
 paddlepaddle==3.2.0
 
 google-genai
-spaces
-
 reportlab==4.4.3
 python-docx==1.2.0
 
