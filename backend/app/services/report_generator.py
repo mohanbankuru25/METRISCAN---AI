@@ -31,6 +31,625 @@ from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
 from docx.shared import Inches, Pt, RGBColor
 
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+
+# ==============================================================================
+# UNICODE FONT REGISTRATION FOR INDIC SCRIPTS (Marathi, Hindi, Telugu, etc.)
+# ==============================================================================
+
+_FONTS_REGISTERED = False
+REGULAR_FONT = "Helvetica"
+BOLD_FONT = "Helvetica-Bold"
+
+def _ensure_fonts_registered():
+    global _FONTS_REGISTERED, REGULAR_FONT, BOLD_FONT
+    if _FONTS_REGISTERED:
+        return
+
+    nirmala_path = "C:\\Windows\\Fonts\\Nirmala.ttc"
+    if os.path.exists(nirmala_path):
+        try:
+            pdfmetrics.registerFont(TTFont("Nirmala", nirmala_path, subfontIndex=0))
+            pdfmetrics.registerFont(TTFont("NirmalaBold", nirmala_path, subfontIndex=1))
+            REGULAR_FONT = "Nirmala"
+            BOLD_FONT = "NirmalaBold"
+            _FONTS_REGISTERED = True
+            return
+        except Exception as e:
+            print(f"Notice: Nirmala TTC registration fallback: {e}")
+
+    arial_path = "C:\\Windows\\Fonts\\arial.ttf"
+    arial_bold = "C:\\Windows\\Fonts\\arialbd.ttf"
+    if os.path.exists(arial_path):
+        try:
+            pdfmetrics.registerFont(TTFont("ArialUni", arial_path))
+            if os.path.exists(arial_bold):
+                pdfmetrics.registerFont(TTFont("ArialUniBold", arial_bold))
+                BOLD_FONT = "ArialUniBold"
+            else:
+                BOLD_FONT = "ArialUni"
+            REGULAR_FONT = "ArialUni"
+            _FONTS_REGISTERED = True
+            return
+        except Exception:
+            pass
+
+    _FONTS_REGISTERED = True
+
+
+# ==============================================================================
+# MULTI-LANGUAGE COMPLIANCE REPORT TRANSLATIONS (English, Marathi, Hindi, etc.)
+# ==============================================================================
+
+COMPLIANCE_REPORT_TRANSLATIONS: Dict[str, Dict[str, str]] = {
+    "en": {
+        "header_title": "LEGAL METROLOGY COMPLIANCE REPORT",
+        "inspection_summary": "INSPECTION SUMMARY",
+        "legal_eval_rule": "Evaluation under Legal Metrology (Packaged Commodities) Rules, 2011 (as amended)",
+        "inspection_id": "Inspection ID",
+        "date": "Date",
+        "file": "File",
+        "evaluated_rules": "Evaluated Rules",
+        "final_verdict": "FINAL COMPLIANCE VERDICT:",
+        "overall_score": "Overall Score",
+        "evidence_eval": "Evidence-based evaluation",
+        "rule_breakdown": "Rule Breakdown",
+        "sec_product_info": "PRODUCT INFORMATION",
+        "prod_name": "Product Name",
+        "prod_category": "Product Category",
+        "net_quantity": "Net Quantity",
+        "retail_price": "Retail Price (MRP)",
+        "batch_no": "Batch / Lot No.",
+        "packed_on": "Packed On Date",
+        "mfg_date": "Manufacturing Date",
+        "best_before": "Best Before",
+        "use_by": "Use By / Expiry",
+        "country_origin": "Country of Origin",
+        "manufacturer": "Manufacturer / Packer",
+        "marketed_by": "Marketed By",
+        "address": "Manufacturer Address",
+        "consumer_contact": "Consumer Contact",
+        "sec_rule6": "MANDATORY DECLARATIONS (RULE 6)",
+        "col_declaration": "Declaration / Check",
+        "col_status": "Status",
+        "col_detected": "Detected Value",
+        "col_explanation": "Evaluation / Short Explanation",
+        "col_manuf_packer": "Manufacturer / Packer",
+        "col_product_name": "Product Name",
+        "col_net_qty": "Net Quantity",
+        "col_mfg_date": "Manufacturing / Packing Date",
+        "col_best_before": "Best Before / Use By",
+        "col_mrp": "MRP (Incl. of all taxes)",
+        "col_consumer_contact": "Consumer Contact",
+        "col_country_origin": "Country of Origin",
+        "col_unit_sale_price": "Unit Sale Price",
+        "eval_manuf": "A manufacturer/packer/importer identity and associated address were evaluated.",
+        "eval_pname": "Product Name declaration was evaluated.",
+        "eval_net_qty": "Net quantity declaration was evaluated.",
+        "eval_mfg_date": "Relevant date declaration was evaluated.",
+        "eval_exp_date": "Relevant date declaration was evaluated.",
+        "eval_mrp": "An explicitly labelled MRP declaration was evaluated.",
+        "eval_consumer": "Consumer care contact details were evaluated.",
+        "eval_country": "Country of origin declaration was evaluated.",
+        "eval_usp": "A separate unit sale price declaration was evaluated under Rule 6(11).",
+        "sec_attention": "ITEMS REQUIRING ATTENTION",
+        "col_rule_req": "Rule & Requirement",
+        "col_evidence": "Evidence",
+        "col_action": "Recommended Action",
+        "sec_visual": "VISUAL INSPECTION SUMMARY",
+        "ocr_confidence": "OCR Mean Confidence",
+        "median_height": "Median Text Height",
+        "text_blocks": "Detected Text Blocks",
+        "min_max_height": "Min / Max Height",
+        "mapped_bboxes": "Bounding Boxes Mapped",
+        "local_contrast": "Local Image Contrast",
+        "text_size_rule": "Text Size (Rule 7)",
+        "placement_rule": "Placement (Rule 8)",
+        "readability_rule": "Readability (Rule 9)",
+        "sec_compliance_summary": "RULE COMPLIANCE SUMMARY (ALL RULES)",
+        "col_rule": "Rule",
+        "col_requirement": "Requirement",
+        "col_findings": "Evidence / Summary",
+        "col_recommendation": "Recommendation",
+        "sec_ocr_evidence": "KEY OCR & VISUAL EVIDENCE",
+        "col_target_rule": "Target Declaration",
+        "col_extracted_text": "Extracted Text",
+        "col_confidence": "Confidence",
+        "col_bbox": "Bounding Box (X1, Y1, X2, Y2)",
+        "sec_recs": "RECOMMENDED ACTIONS FOR INSPECTOR",
+        "sec_signoff": "INSPECTOR REMARKS & FINAL DETERMINATION",
+        "remarks_label": "Inspector Remarks:",
+        "final_decision": "Final Inspection Decision:",
+        "inspector_name": "Inspector Name:",
+        "designation": "Designation:",
+        "inspection_date": "Inspection Date:",
+        "signature": "Signature:",
+        "running_header": "LEGAL METROLOGY COMPLIANCE INSPECTION REPORT — RULES, 2011",
+        "footer_confidential": "CONFIDENTIAL — Legal Metrology Inspection Record | MetriScan-AI Compliance System",
+        "page_x_of_y": "Page {page} of {total}",
+        "pass": "✓ PASS",
+        "fail": "✕ FAIL",
+        "review": "! REVIEW",
+        "na": "— N/A",
+        "out_of_scope": "— OUT OF SCOPE",
+        "not_declared": "Not Declared",
+        "not_detected": "Not Detected",
+        "not_applicable": "Not Applicable / Not Declared",
+    },
+    "mr": {
+        "header_title": "कायदेशीर मापनशास्त्र अनुपालन तपासणी अहवाल",
+        "inspection_summary": "तपासणी सारांश",
+        "legal_eval_rule": "कायदेशीर मापनशास्त्र (पॅक केलेल्या वस्तू) नियम, २०११ (सुधारित) अन्वये मूल्यांकन",
+        "inspection_id": "तपासणी आयडी",
+        "date": "तारीख",
+        "file": "फाईल",
+        "evaluated_rules": "मूल्यांकन केलेले नियम",
+        "final_verdict": "अंतिम अनुपालन निर्णय:",
+        "overall_score": "एकूण गुण",
+        "evidence_eval": "पुराव्याधारित मूल्यांकन",
+        "rule_breakdown": "नियम वर्गीकरण",
+        "sec_product_info": "उत्पादन माहिती",
+        "prod_name": "उत्पादनाचे नाव",
+        "prod_category": "उत्पादन श्रेणी",
+        "net_quantity": "निव्वळ प्रमाण (Net Quantity)",
+        "retail_price": "कमाल किरकोळ किंमत (MRP)",
+        "batch_no": "बॅच / लॉट क्रमांक",
+        "packed_on": "पॅकिंग तारीख",
+        "mfg_date": "उत्पादन तारीख",
+        "best_before": "उत्कृष्ट वापर (Best Before)",
+        "use_by": "कालबाह्यता तारीख (Expiry)",
+        "country_origin": "मूळ देश (Country of Origin)",
+        "manufacturer": "उत्पादक / पॅकर",
+        "marketed_by": "विपणनकर्ता (Marketed By)",
+        "address": "उत्पादकाचा पत्ता",
+        "consumer_contact": "ग्राहक सेवा संपर्क",
+        "sec_rule6": "नियम ६ अनिवार्य वैधानिक घोषणा",
+        "col_declaration": "वैधानिक घोषणा / तपासणी",
+        "col_status": "स्थिती",
+        "col_detected": "आढळलेले मूल्य",
+        "col_explanation": "मूल्यांकन / संक्षिप्त स्पष्टीकरण",
+        "col_manuf_packer": "उत्पादक / पॅकर / आयातदार",
+        "col_product_name": "उत्पादनाचे नाव / सामान्य वर्णन",
+        "col_net_qty": "निव्वळ प्रमाण (Net Quantity)",
+        "col_mfg_date": "उत्पादन / पॅकिंग तारीख",
+        "col_best_before": "उत्कृष्ट वापर / कालबाह्यता तारीख",
+        "col_mrp": "कमाल किरकोळ किंमत (सर्व करांसह)",
+        "col_consumer_contact": "ग्राहक तक्रार निवारण संपर्क",
+        "col_country_origin": "मूळ देश (Country of Origin)",
+        "col_unit_sale_price": "प्रति युनिट विक्री किंमत",
+        "eval_manuf": "उत्पादक/पॅकर/आयातदार ओळख आणि पत्त्याचे मूल्यांकन केले गेले.",
+        "eval_pname": "उत्पादनाच्या नावाच्या घोषणेचे मूल्यांकन केले गेले.",
+        "eval_net_qty": "निव्वळ प्रमाणाच्या घोषणेचे मूल्यांकन केले गेले.",
+        "eval_mfg_date": "संबंधित उत्पादन तारखेचे मूल्यांकन केले गेले.",
+        "eval_exp_date": "संबंधित कालबाह्यता तारखेचे मूल्यांकन केले गेले.",
+        "eval_mrp": "कमाल किरकोळ किमतीच्या (MRP) घोषणेचे मूल्यांकन केले गेले.",
+        "eval_consumer": "ग्राहक सेवा संपर्काच्या तपशिलाचे मूल्यांकन केले गेले.",
+        "eval_country": "मूळ देश घोषणेचे मूल्यांकन केले गेले.",
+        "eval_usp": "नियम ६(११) अंतर्गत प्रति युनिट विक्री किमतीचे मूल्यांकन केले गेले.",
+        "sec_attention": "दुरुस्ती आवश्यक बाबी आणि कारवाई",
+        "col_rule_req": "नियम आणि आवश्यकता",
+        "col_evidence": "पुरावा / निरीक्षण",
+        "col_action": "सुचवलेली कारवाई",
+        "sec_visual": "दृश्य व भौतिक पडताळणी सारांश",
+        "ocr_confidence": "ओसीआर सरासरी विश्वासार्हता",
+        "median_height": "मध्यम मजकूर उंची",
+        "text_blocks": "आढळलेले मजकूर ब्लॉक",
+        "min_max_height": "किमान / कमाल उंची",
+        "mapped_bboxes": "मॅप केलेले बाउंडिंग बॉक्स",
+        "local_contrast": "प्रतिमा कॉन्ट्रास्ट (Contrast)",
+        "text_size_rule": "मजकूर आकार (नियम ७)",
+        "placement_rule": "स्थान (नियम ८)",
+        "readability_rule": "वाचनीयता (नियम ९)",
+        "sec_compliance_summary": "वैधानिक नियम अनुपालन सारांश",
+        "col_rule": "नियम",
+        "col_requirement": "वैधानिक आवश्यकता",
+        "col_findings": "पुरावा / सारांश",
+        "col_recommendation": "शिफारस",
+        "sec_ocr_evidence": "मुख्य ओसीआर आणि दृश्य पुरावा",
+        "col_target_rule": "लक्ष्य घोषणा",
+        "col_extracted_text": "काढलेला मजकूर",
+        "col_confidence": "विश्वासार्हता",
+        "col_bbox": "स्थान (Bounding Box)",
+        "sec_recs": "तपासनीसासाठी शिफारस केलेल्या कृती",
+        "sec_signoff": "तपासनीस शेरा आणि अंतिम निर्णय",
+        "remarks_label": "तपासनीस शेरा:",
+        "final_decision": "अंतिम तपासणी निर्णय:",
+        "inspector_name": "तपासनीसाचे नाव:",
+        "designation": "पदनाम:",
+        "inspection_date": "तपासणी तारीख:",
+        "signature": "स्वाक्षरी:",
+        "running_header": "कायदेशीर मापनशास्त्र अनुपालन तपासणी अहवाल — नियम, २०११",
+        "footer_confidential": "गोपनीय — कायदेशीर मापनशास्त्र तपासणी नोंद | मेट्रिस्कॅन-एआय अनुपालन प्रणाली",
+        "page_x_of_y": "पृष्ठ {page} पैकी {total}",
+        "pass": "✓ अनुपालक (PASS)",
+        "fail": "✕ उल्लंघन (FAIL)",
+        "review": "! पुनरावलोकन (REVIEW)",
+        "na": "— लागू नाही",
+        "out_of_scope": "— कक्षेबाहेर",
+        "not_declared": "घोषित केलेले नाही",
+        "not_detected": "आढळले नाही",
+        "not_applicable": "लागू नाही / घोषित नाही",
+    },
+    "hi": {
+        "header_title": "विधिक मापविज्ञान अनुपालन निरीक्षण रिपोर्ट",
+        "inspection_summary": "निरीक्षण सारांश",
+        "legal_eval_rule": "विधिक मापविज्ञान (पैक की गई वस्तुएं) नियम, 2011 (यथा संशोधित) के अंतर्गत मूल्यांकन",
+        "inspection_id": "निरीक्षण आईडी",
+        "date": "दिनांक",
+        "file": "फ़ाइल",
+        "evaluated_rules": "मूल्यांकित नियम",
+        "final_verdict": "अंतिम अनुपालन निर्णय:",
+        "overall_score": "कुल स्कोर",
+        "evidence_eval": "साक्ष्य-आधारित मूल्यांकन",
+        "rule_breakdown": "नियम विवरण",
+        "sec_product_info": "उत्पाद जानकारी",
+        "prod_name": "उत्पाद का नाम",
+        "prod_category": "उत्पाद श्रेणी",
+        "net_quantity": "शुद्ध मात्रा (Net Quantity)",
+        "retail_price": "अधिकतम खुदरा मूल्य (MRP)",
+        "batch_no": "बैच / लॉट संख्या",
+        "packed_on": "पैकिंग तिथि",
+        "mfg_date": "निर्माण तिथि",
+        "best_before": "सर्वोत्तम उपयोग (Best Before)",
+        "use_by": "समाप्ति तिथि (Expiry)",
+        "country_origin": "उत्पत्ति का देश (Country of Origin)",
+        "manufacturer": "निर्माता / पैकर",
+        "marketed_by": "विपणनकर्ता (Marketed By)",
+        "address": "निर्माता का पता",
+        "consumer_contact": "उपभोक्ता सहायता संपर्क",
+        "sec_rule6": "नियम 6 अनिवार्य वैधानिक घोषणाएं",
+        "col_declaration": "वैधानिक घोषणा / जांच",
+        "col_status": "स्थिति",
+        "col_detected": "पाया गया मान",
+        "col_explanation": "मूल्यांकन / संक्षिप्त स्पष्टीकरण",
+        "col_manuf_packer": "निर्माता / पैकर / आयातक",
+        "col_product_name": "उत्पाद का नाम / सामान्य विवरण",
+        "col_net_qty": "शुद्ध मात्रा (Net Quantity)",
+        "col_mfg_date": "निर्माण / पैकिंग तिथि",
+        "col_best_before": "सर्वोत्तम उपयोग / समाप्ति तिथि",
+        "col_mrp": "अधिकतम खुदरा मूल्य (सभी कर सहित)",
+        "col_consumer_contact": "उपभोक्ता सहायता संपर्क व ईमेल",
+        "col_country_origin": "उत्पत्ति का देश",
+        "col_unit_sale_price": "प्रति इकाई बिक्री मूल्य",
+        "eval_manuf": "निर्माता/पैकर/आयातक पहचान और पते का मूल्यांकन किया गया।",
+        "eval_pname": "उत्पाद नाम घोषणा का मूल्यांकन किया गया।",
+        "eval_net_qty": "शुद्ध मात्रा घोषणा का मूल्यांकन किया गया।",
+        "eval_mfg_date": "संबंधित निर्माण तिथि का मूल्यांकन किया गया।",
+        "eval_exp_date": "संबंधित समाप्ति तिथि का मूल्यांकन किया गया।",
+        "eval_mrp": "अधिकतम खुदरा मूल्य (MRP) का मूल्यांकन किया गया।",
+        "eval_consumer": "उपभोक्ता सहायता विवरण का मूल्यांकन किया गया।",
+        "eval_country": "उत्पत्ति देश की घोषणा का मूल्यांकन किया गया।",
+        "eval_usp": "नियम 6(11) के तहत प्रति इकाई बिक्री मूल्य का मूल्यांकन किया गया।",
+        "sec_attention": "ध्यान देने योग्य बिंदु एवं सुधारात्मक कार्रवाई",
+        "col_rule_req": "नियम एवं आवश्यकता",
+        "col_evidence": "साक्ष्य / अवलोकन",
+        "col_action": "सुझाई गई कार्रवाई",
+        "sec_visual": "दृश्य एवं भौतिक सत्यापन सारांश",
+        "ocr_confidence": "ओसीआर औसत विश्वास",
+        "median_height": "मध्यम पाठ ऊंचाई",
+        "text_blocks": "पहचाने गए पाठ ब्लॉक",
+        "min_max_height": "न्यूनतम / अधिकतम ऊंचाई",
+        "mapped_bboxes": "मैप किए गए बाउंडिंग बॉक्स",
+        "local_contrast": "स्थानीय छवि कंट्रास्ट",
+        "text_size_rule": "पाठ का आकार (नियम 7)",
+        "placement_rule": "स्थान (नियम 8)",
+        "readability_rule": "पठनीयता (नियम 9)",
+        "sec_compliance_summary": "वैधानिक नियम अनुपालन सारांश",
+        "col_rule": "नियम",
+        "col_requirement": "वैधानिक आवश्यकता",
+        "col_findings": "साक्ष्य / सारांश",
+        "col_recommendation": "अनुशंसा",
+        "sec_ocr_evidence": "प्रमुख ओसीआर एवं दृश्य साक्ष्य",
+        "col_target_rule": "लक्ष्य घोषणा",
+        "col_extracted_text": "प्राप्त पाठ",
+        "col_confidence": "विश्वास",
+        "col_bbox": "स्थान (Bounding Box)",
+        "sec_recs": "निरीक्षक के लिए अनुशंसित कार्रवाइयां",
+        "sec_signoff": "निरीक्षक टिप्पणी एवं अंतिम निर्धारण",
+        "remarks_label": "निरीक्षक टिप्पणी:",
+        "final_decision": "अंतिम निरीक्षण निर्णय:",
+        "inspector_name": "निरीक्षक का नाम:",
+        "designation": "पदनाम:",
+        "inspection_date": "निरीक्षण तिथि:",
+        "signature": "हस्ताक्षर:",
+        "running_header": "विधिक मापविज्ञान अनुपालन निरीक्षण रिपोर्ट — नियम, 2011",
+        "footer_confidential": "गोपनीय — विधिक मापविज्ञान निरीक्षण अभिलेख | मेट्रिस्कॅन-एआई",
+        "page_x_of_y": "पृष्ठ {page} / {total}",
+        "pass": "✓ अनुपालक (PASS)",
+        "fail": "✕ उल्लंघन (FAIL)",
+        "review": "! समीक्षा (REVIEW)",
+        "na": "— लागू नहीं",
+        "out_of_scope": "— कार्यक्षेत्र से बाहर",
+        "not_declared": "घोषित नहीं",
+        "not_detected": "पहचाना नहीं गया",
+        "not_applicable": "लागू नहीं / अघोषित",
+    },
+    "te": {
+        "header_title": "లీగల్ మెట్రాలజీ సమ్మతి తనిఖీ నివేదిక",
+        "inspection_summary": "తనిఖీ సారాంశం",
+        "legal_eval_rule": "లీగల్ మెట్రాలజీ (ప్యాక్ చేయబడిన వస్తువులు) నిబంధనలు, 2011 ప్రకారం మూల్యాంకనం",
+        "inspection_id": "తనిఖీ ఐడీ",
+        "date": "తేదీ",
+        "file": "ఫైల్",
+        "evaluated_rules": "మూల్యాంకనం చేసిన నియమాలు",
+        "final_verdict": "తుది సమ్మతి తీర్పు:",
+        "overall_score": "మొత్తం స్కోరు",
+        "evidence_eval": "సాక్ష్యాధారిత మూల్యాంకనం",
+        "rule_breakdown": "నియమాల విభజన",
+        "sec_product_info": "ఉత్పత్తి సమాచారం",
+        "prod_name": "ఉత్పత్తి పేరు",
+        "prod_category": "ఉత్పత్తి వర్గం",
+        "net_quantity": "నికర పరిమాణం (Net Quantity)",
+        "retail_price": "గరిష్ట రిటైల్ ధర (MRP)",
+        "batch_no": "బ్యాచ్ / లాట్ సంఖ్య",
+        "packed_on": "ప్యాకింగ్ తేదీ",
+        "mfg_date": "తయారీ తేదీ",
+        "best_before": "ఉత్తమ వినియోగం (Best Before)",
+        "use_by": "గడువు తేదీ (Expiry)",
+        "country_origin": "మూల దేశం (Country of Origin)",
+        "manufacturer": "తయారీదారు / ప్యాకర్",
+        "marketed_by": "మార్కెటింగ్ చేసినవారు",
+        "address": "తయారీదారు చిరునామా",
+        "consumer_contact": "కస్టమర్ కేర్ సంప్రదింపు",
+        "sec_rule6": "నియమం 6 తప్పనిసరి చట్టబద్ధ ప్రకటనలు",
+        "col_declaration": "చట్టబద్ధ ప్రకటన / తనిఖీ",
+        "col_status": "స్థితి",
+        "col_detected": "గుర్తించిన విలువ",
+        "col_explanation": "మూల్యాంకనం / సంక్షిప్త వివరణ",
+        "col_manuf_packer": "తయారీదారు / ప్యాకర్ / దిగుమతిదారు",
+        "col_product_name": "ఉత్పత్తి పేరు / వివరణ",
+        "col_net_qty": "నికర పరిమాణం",
+        "col_mfg_date": "తయారీ / ప్యాకింగ్ తేదీ",
+        "col_best_before": "ఉత్తమ వినియోగం / గడువు తేదీ",
+        "col_mrp": "గరిష్ట రిటైల్ ధర (అన్ని పన్నులతో సహా)",
+        "col_consumer_contact": "కస్టమర్ కేర్ వివరాలు",
+        "col_country_origin": "మూల దేశం",
+        "col_unit_sale_price": "యూనిట్ అమ్మకపు ధర",
+        "eval_manuf": "తయారీదారు గుర్తింపు మరియు చిరునామా మూల్యాంకనం చేయబడింది.",
+        "eval_pname": "ఉత్పత్తి పేరు ప్రకటన మూల్యాంకనం చేయబడింది.",
+        "eval_net_qty": "నికర పరిమాణ ప్రకటన మూల్యాంకనం చేయబడింది.",
+        "eval_mfg_date": "తేదీ ప్రకటన మూల్యాంకనం చేయబడింది.",
+        "eval_exp_date": "గడువు తేదీ ప్రకటన మూల్యాంకనం చేయబడింది.",
+        "eval_mrp": "MRP ప్రకటన మూల్యాంకనం చేయబడింది.",
+        "eval_consumer": "కస్టమర్ కేర్ వివరాలు మూల్యాంకనం చేయబడ్డాయి.",
+        "eval_country": "మూల దేశం ప్రకటన మూల్యాంకనం చేయబడింది.",
+        "eval_usp": "యూనిట్ ధర ప్రకటన మూల్యాంకనం చేయబడింది.",
+        "sec_attention": "శ్రద్ధ వహించాల్సిన అంశాలు & చర్యలు",
+        "col_rule_req": "నియమం & అవసరం",
+        "col_evidence": "సాక్ష్యం / పరిశీలన",
+        "col_action": "సూచించిన చర్య",
+        "sec_visual": "దృశ్య & భౌతిక తనిఖీ సారాంశం",
+        "ocr_confidence": "OCR సగటు విశ్వసనీయత",
+        "median_height": "మధ్యస్థ వచన ఎత్తు",
+        "text_blocks": "గుర్తించిన టెక్స్ట్ బ్లాక్‌లు",
+        "min_max_height": "కనిష్ట / గరిష్ట ఎత్తు",
+        "mapped_bboxes": "మ్యాప్ చేసిన బౌండింగ్ బాక్స్‌లు",
+        "local_contrast": "చిత్ర కాంట్రాస్ట్",
+        "text_size_rule": "టెక్స్ట్ పరిమాణం (నియమం 7)",
+        "placement_rule": "స్థానం (నియమం 8)",
+        "readability_rule": "చదవదగినతనం (నియమం 9)",
+        "sec_compliance_summary": "చట్టబద్ధ నిబంధనల సమ్మతి సారాంశం",
+        "col_rule": "నియమం",
+        "col_requirement": "అవసరం",
+        "col_findings": "సాక్ష్యం / సారాంశం",
+        "col_recommendation": "సిఫార్సు",
+        "sec_ocr_evidence": "కీలక OCR మరియు దృశ్య సాక్ష్యాలు",
+        "col_target_rule": "లక్ష్య ప్రకటన",
+        "col_extracted_text": "సేకరించిన వచనం",
+        "col_confidence": "విశ్వసనీయత",
+        "col_bbox": "స్థానం (Bounding Box)",
+        "sec_recs": "ఇన్స్పెక్టర్ కోసం సిఫార్సు చేయబడిన చర్యలు",
+        "sec_signoff": "ఇన్స్పెక్టర్ వ్యాఖ్యలు మరియు తుది నిర్ణయం",
+        "remarks_label": "ఇన్స్పెక్టర్ వ్యాఖ్యలు:",
+        "final_decision": "తుది తనిఖీ నిర్ణయం:",
+        "inspector_name": "ఇన్స్పెక్టర్ పేరు:",
+        "designation": "హోదా:",
+        "inspection_date": "తనిఖీ తేదీ:",
+        "signature": "సంతకం:",
+        "running_header": "లీగల్ మెట్రాలజీ సమ్మతి తనిఖీ నివేదిక — నిబంధనలు, 2011",
+        "footer_confidential": "రహస్యం — లీగల్ మెట్రాలజీ తనిఖీ రికార్డు | మెట్రిస్కాన్-AI",
+        "page_x_of_y": "పేజీ {page} / {total}",
+        "pass": "✓ ఆమోదం (PASS)",
+        "fail": "✕ తిరస్కరణ (FAIL)",
+        "review": "! సమీక్ష (REVIEW)",
+        "na": "— వర్తించదు",
+        "out_of_scope": "— పరిధి వెలుపల",
+        "not_declared": "ప్రకటించబడలేదు",
+        "not_detected": "గుర్తించబడలేదు",
+        "not_applicable": "వర్తించదు / ప్రకటించలేదు",
+    },
+    "ta": {
+        "header_title": "சட்ட அளவியல் இணக்க ஆய்வு அறிக்கை",
+        "inspection_summary": "ஆய்வு சுருக்கம்",
+        "legal_eval_rule": "சட்ட அளவியல் (பொட்டலப் பொருட்கள்) விதிகள், 2011 இன் கீழ் மதிப்பீடு",
+        "inspection_id": "ஆய்வு ஐடி",
+        "date": "தேதி",
+        "file": "கோப்பு",
+        "evaluated_rules": "மதிப்பிடப்பட்ட விதிகள்",
+        "final_verdict": "இறுதி இணக்க தீர்ப்பு:",
+        "overall_score": "ஒட்டுமொத்த மதிப்பெண்",
+        "evidence_eval": "சான்று அடிப்படையிலான மதிப்பீடு",
+        "rule_breakdown": "விதிகள் விவரம்",
+        "sec_product_info": "தயாரிப்பு தகவல்",
+        "prod_name": "தயாரிப்பு பெயர்",
+        "prod_category": "தயாரிப்பு வகை",
+        "net_quantity": "நிகர அளவு (Net Quantity)",
+        "retail_price": "அதிகபட்ச சில்லறை விலை (MRP)",
+        "batch_no": "தொகுதி / லாட் எண்",
+        "packed_on": "பேக்கிங் தேதி",
+        "mfg_date": "தயாரிப்பு தேதி",
+        "best_before": "சிறந்த பயன்பாடு (Best Before)",
+        "use_by": "காலாவதி தேதி (Expiry)",
+        "country_origin": "தோற்ற நாடு (Country of Origin)",
+        "manufacturer": "உற்பத்தியாளர் / பேக்கர்",
+        "marketed_by": "சந்தைப்படுத்துபவர்",
+        "address": "உற்பத்தியாளர் முகவரி",
+        "consumer_contact": "நுகர்வோர் சேவை தொடர்பு",
+        "sec_rule6": "விதி 6 கட்டாய சட்டப்பூர்வ அறிவிப்புகள்",
+        "col_declaration": "சட்டப்பூர்வ அறிவிப்பு / சரிபார்ப்பு",
+        "col_status": "நிலை",
+        "col_detected": "கண்டறியப்பட்ட மதிப்பு",
+        "col_explanation": "மதிப்பீடு / சுருக்க விளக்கம்",
+        "col_manuf_packer": "உற்பத்தியாளர் / பேக்கர் / இறக்குமதியாளர்",
+        "col_product_name": "தயாரிப்பு பெயர் / விளக்கம்",
+        "col_net_qty": "நிகர அளவு",
+        "col_mfg_date": "தயாரிப்பு / பேக்கிங் தேதி",
+        "col_best_before": "பயன்பாட்டு தேதி / காலாவதி",
+        "col_mrp": "அதிகபட்ச சில்லறை விலை (வரி உட்பட)",
+        "col_consumer_contact": "நுகர்வோர் சேவை விவரங்கள்",
+        "col_country_origin": "தோற்ற நாடு",
+        "col_unit_sale_price": "அலகு விற்பனை விலை",
+        "eval_manuf": "உற்பத்தியாளர் மற்றும் முகவரி மதிப்பீடு செய்யப்பட்டது.",
+        "eval_pname": "தயாரிப்பு பெயர் அறிவிப்பு மதிப்பீடு செய்யப்பட்டது.",
+        "eval_net_qty": "நிகர அளவு அறிவிப்பு மதிப்பீடு செய்யப்பட்டது.",
+        "eval_mfg_date": "தேதி அறிவிப்பு மதிப்பீடு செய்யப்பட்டது.",
+        "eval_exp_date": "காலாவதி தேதி அறிவிப்பு மதிப்பீடு செய்யப்பட்டது.",
+        "eval_mrp": "MRP அறிவிப்பு மதிப்பீடு செய்யப்பட்டது.",
+        "eval_consumer": "நுகர்வோர் சேவை விவரங்கள் மதிப்பீடு செய்யப்பட்டன.",
+        "eval_country": "தோற்ற நாடு அறிவிப்பு மதிப்பீடு செய்யப்பட்டது.",
+        "eval_usp": "அலகு விலை அறிவிப்பு மதிப்பீடு செய்யப்பட்டது.",
+        "sec_attention": "கவனிக்கப்பட வேண்டியவை & திருத்த நடவடிக்கைகள்",
+        "col_rule_req": "விதி & தேவை",
+        "col_evidence": "சான்று / கவனிப்பு",
+        "col_action": "பரிந்துரைக்கப்பட்ட நடவடிக்கை",
+        "sec_visual": "காட்சி & உடல் சரிபார்ப்பு சுருக்கம்",
+        "ocr_confidence": "OCR சராசரி நம்பிக்கை",
+        "median_height": "நடுத்தர உரை உயரம்",
+        "text_blocks": "கண்டறியப்பட்ட உரைத் தொகுதிகள்",
+        "min_max_height": "குறைந்தபட்ச / அதிகபட்ச உயரம்",
+        "mapped_bboxes": "பொருத்தப்பட்ட எல்லைப் பெட்டிகள்",
+        "local_contrast": "பட மாறுபாடு (Contrast)",
+        "text_size_rule": "உரை அளவு (விதி 7)",
+        "placement_rule": "இடம் (விதி 8)",
+        "readability_rule": "படிக்கக்கூடிய தன்மை (விதி 9)",
+        "sec_compliance_summary": "சட்டப்பூர்வ விதி இணக்க சுருக்கம்",
+        "col_rule": "விதி",
+        "col_requirement": "தேவை",
+        "col_findings": "சான்று / சுருக்கம்",
+        "col_recommendation": "பரிந்துரை",
+        "sec_ocr_evidence": "முக்கிய OCR மற்றும் காட்சி சான்றுகள்",
+        "col_target_rule": "இலக்கு அறிவிப்பு",
+        "col_extracted_text": "பிரித்தெடுக்கப்பட்ட உரை",
+        "col_confidence": "நம்பிக்கை",
+        "col_bbox": "இடம் (Bounding Box)",
+        "sec_recs": "ஆய்வாளருக்கான பரிந்துரைக்கப்பட்ட நடவடிக்கைகள்",
+        "sec_signoff": "ஆய்வாளர் கருத்துகள் மற்றும் இறுதி முடிவு",
+        "remarks_label": "ஆய்வாளர் கருத்துகள்:",
+        "final_decision": "இறுதி ஆய்வு முடிவு:",
+        "inspector_name": "ஆய்வாளர் பெயர்:",
+        "designation": "பதவி:",
+        "inspection_date": "ஆய்வு தேதி:",
+        "signature": "கையொப்பம்:",
+        "running_header": "சட்ட அளவியல் இணக்க ஆய்வு அறிக்கை — விதிகள், 2011",
+        "footer_confidential": "ரகசியம் — சட்ட அளவியல் ஆய்வு பதிவு | மெட்ரிஸ்கேன்-AI",
+        "page_x_of_y": "பக்கம் {page} / {total}",
+        "pass": "✓ தேர்ச்சி (PASS)",
+        "fail": "✕ தோல்வி (FAIL)",
+        "review": "! மறுஆய்வு (REVIEW)",
+        "na": "— பொருந்தாது",
+        "out_of_scope": "— வரம்பிற்கு அப்பாற்பட்டது",
+        "not_declared": "அறிவிக்கப்படவில்லை",
+        "not_detected": "கண்டறியப்படவில்லை",
+        "not_applicable": "பொருந்தாது / அறிவிக்கப்படவில்லை",
+    },
+    "kn": {
+        "header_title": "ಕಾನೂನು ಮಾಪನಶಾಸ್ತ್ರ ಅನುಸರಣೆ ತಪಾಸಣಾ ವರದಿ",
+        "inspection_summary": "ತಪಾಸಣಾ ಸಾರಾಂಶ",
+        "legal_eval_rule": "ಕಾನೂನು ಮಾಪನಶಾಸ್ತ್ರ (ಪ್ಯಾಕ್ ಮಾಡಿದ ಸರಕುಗಳು) ನಿಯಮಗಳು, 2011 ರ ಅಡಿಯಲ್ಲಿ ಮೌಲ್ಯಮಾಪನ",
+        "inspection_id": "ತಪಾಸಣಾ ಐಡಿ",
+        "date": "ದಿನಾಂಕ",
+        "file": "ಫೈಲ್",
+        "evaluated_rules": "ಮೌಲ್ಯಮಾಪನ ಮಾಡಿದ ನಿಯಮಗಳು",
+        "final_verdict": "ಅಂತಿಮ ಅನುಸರಣೆ ತೀರ್ಪು:",
+        "overall_score": "ಒಟ್ಟು ಸ್ಕೋರ್",
+        "evidence_eval": "ಸಾಕ್ಷ್ಯಾಧಾರಿತ ಮೌಲ್ಯಮಾಪನ",
+        "rule_breakdown": "ನಿಯಮಗಳ ವಿವರ",
+        "sec_product_info": "ಉತ್ಪನ್ನ ಮಾಹಿತಿ",
+        "prod_name": "ಉತ್ಪನ್ನದ ಹೆಸರು",
+        "prod_category": "ಉತ್ಪನ್ನ ವರ್ಗ",
+        "net_quantity": "ನಿವ್ವಳ ಪ್ರಮಾಣ (Net Quantity)",
+        "retail_price": "ಗರಿಷ್ಠ ಚಿಲ್ಲರೆ ಬೆಲೆ (MRP)",
+        "batch_no": "ಬ್ಯಾಚ್ / ಲಾಟ್ ಸಂಖ್ಯೆ",
+        "packed_on": "ಪ್ಯಾಕಿಂಗ್ ದಿನಾಂಕ",
+        "mfg_date": "ತಯಾರಿಕೆ ದಿನಾಂಕ",
+        "best_before": "ಉತ್ತಮ ಬಳಕೆ (Best Before)",
+        "use_by": "ಮುಕ್ತಾಯ ದಿನಾಂಕ (Expiry)",
+        "country_origin": "ಮೂಲ ದೇಶ (Country of Origin)",
+        "manufacturer": "ತಯಾರಕರು / ಪ್ಯಾಕರ್",
+        "marketed_by": "ಮಾರ್ಕೆಟಿಂಗ್ ಮಾಡಿದವರು",
+        "address": "ತಯಾರಕರ ವಿಳಾಸ",
+        "consumer_contact": "ಗ್ರಾಹಕ ಸೇವಾ ಸಂಪರ್ಕ",
+        "sec_rule6": "ನಿಯಮ 6 ಕಡ್ಡಾಯ ಶಾಸನಬದ್ಧ ಘೋಷಣೆಗಳು",
+        "col_declaration": "ಶಾಸನಬದ್ಧ ಘೋಷಣೆ / ತಪಾಸಣೆ",
+        "col_status": "ಸ್ಥಿತಿ",
+        "col_detected": "ಪತ್ತೆಯಾದ ಮೌಲ್ಯ",
+        "col_explanation": "ಮೌಲ್ಯಮಾಪನ / ಸಂಕ್ಷಿಪ್ತ ವಿವರಣೆ",
+        "col_manuf_packer": "ತಯಾರಕರು / ಪ್ಯಾಕರ್ / ಆಮದುದಾರರು",
+        "col_product_name": "ಉತ್ಪನ್ನದ ಹೆಸರು / ವಿವರಣೆ",
+        "col_net_qty": "ನಿವ್ವಳ ಪ್ರಮಾಣ",
+        "col_mfg_date": "ತಯಾರಿಕೆ / ಪ್ಯಾಕಿಂಗ್ ದಿನಾಂಕ",
+        "col_best_before": "ಉತ್ತಮ ಬಳಕೆ / ಮುಕ್ತಾಯ ದಿನಾಂಕ",
+        "col_mrp": "ಗರಿಷ್ಠ ಚಿಲ್ಲರೆ ಬೆಲೆ (ಎಲ್ಲಾ ತೆರಿಗೆಗಳು ಸೇರಿ)",
+        "col_consumer_contact": "ಗ್ರಾಹಕ ಸೇವಾ ವಿವರಗಳು",
+        "col_country_origin": "ಮೂಲ ದೇಶ",
+        "col_unit_sale_price": "ಪ್ರತಿ ಯೂನಿಟ್ ಮಾರಾಟ ಬೆಲೆ",
+        "eval_manuf": "ತಯಾರಕರು ಮತ್ತು ವಿಳಾಸವನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_pname": "ಉತ್ಪನ್ನದ ಹೆಸರು ಘೋಷಣೆಯನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_net_qty": "ನಿವ್ವಳ ಪ್ರಮಾಣ ಘೋಷಣೆಯನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_mfg_date": "ದಿನಾಂಕ ಘೋಷಣೆಯನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_exp_date": "ಮುಕ್ತಾಯ ದಿನಾಂಕ ಘೋಷಣೆಯನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_mrp": "MRP ಘೋಷಣೆಯನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_consumer": "ಗ್ರಾಹಕ ಸೇವಾ ವಿವರಗಳನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_country": "ಮೂಲ ದೇಶ ಘೋಷಣೆಯನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "eval_usp": "ಯೂನಿಟ್ ಬೆಲೆ ಘೋಷಣೆಯನ್ನು ಮೌಲ್ಯಮಾಪನ ಮಾಡಲಾಗಿದೆ.",
+        "sec_attention": "ಗಮನ ಹರಿಸಬೇಕಾದ ಅಂಶಗಳು ಮತ್ತು ಕ್ರಮಗಳು",
+        "col_rule_req": "ನಿಯಮ ಮತ್ತು ಅವಶ್ಯಕತೆ",
+        "col_evidence": "ಸಾಕ್ಷ್ಯ / ವೀಕ್ಷಣೆ",
+        "col_action": "ಶಿಫಾರಸು ಮಾಡಿದ ಕ್ರಮ",
+        "sec_visual": "ದೃಶ್ಯ ಮತ್ತು ಭೌತಿಕ ಪರಿಶೀಲನಾ ಸಾರಾಂಶ",
+        "ocr_confidence": "OCR ಸರಾಸರಿ ವಿಶ್ವಾಸಾರ್ಹತೆ",
+        "median_height": "ಮಧ್ಯಮ ಪಠ್ಯ ಎತ್ತರ",
+        "text_blocks": "ಪತ್ತೆಯಾದ ಪಠ್ಯ ಬ್ಲಾಕ್‌ಗಳು",
+        "min_max_height": "ಕನಿಷ್ಠ / ಗರಿಷ್ಠ ಎತ್ತರ",
+        "mapped_bboxes": "ಮ್ಯಾಪ್ ಮಾಡಿದ ಬೌಂಡಿಂಗ್ ಬಾಕ್ಸ್‌ಗಳು",
+        "local_contrast": "ಚಿತ್ರ ಕಾಂಟ್ರಾಸ್ಟ್",
+        "text_size_rule": "ಪಠ್ಯದ ಗಾತ್ರ (ನಿಯಮ 7)",
+        "placement_rule": "ಸ್ಥಳ (ನಿಯಮ 8)",
+        "readability_rule": "ಓದುವಿಕೆ (ನಿಯಮ 9)",
+        "sec_compliance_summary": "ಶಾಸನಬದ್ಧ ನಿಯಮಗಳ ಅನುಸರಣೆ ಸಾರಾಂಶ",
+        "col_rule": "ನಿಯಮ",
+        "col_requirement": "ಅವಶ್ಯಕತೆ",
+        "col_findings": "ಸಾಕ್ಷ್ಯ / ಸಾರಾಂಶ",
+        "col_recommendation": "ಶಿಫಾರಸು",
+        "sec_ocr_evidence": "ಪ್ರಮುಖ OCR ಮತ್ತು ದೃಶ್ಯ ಸಾಕ್ಷ್ಯಗಳು",
+        "col_target_rule": "ಗುರಿ ಘೋಷಣೆ",
+        "col_extracted_text": "ಹೊರತೆಗೆದ ಪಠ್ಯ",
+        "col_confidence": "ವಿಶ್ವಾಸಾರ್ಹತೆ",
+        "col_bbox": "ಸ್ಥಳ (Bounding Box)",
+        "sec_recs": "ತಪಾಸಕರಿಗೆ ಶಿಫಾರಸು ಮಾಡಿದ ಕ್ರಮಗಳು",
+        "sec_signoff": "ತಪಾಸಕರ ಅಭಿಪ್ರಾಯ ಮತ್ತು ಅಂತಿಮ ನಿರ್ಧಾರ",
+        "remarks_label": "ತಪಾಸಕರ ಅಭಿಪ್ರಾಯ:",
+        "final_decision": "ಅಂತಿಮ ತಪಾಸಣಾ ನಿರ್ಧಾರ:",
+        "inspector_name": "ತಪಾಸಕರ ಹೆಸರು:",
+        "designation": "ಹುದ್ದೆ:",
+        "inspection_date": "ತಪಾಸಣಾ ದಿನಾಂಕ:",
+        "signature": "ಸಹಿ:",
+        "running_header": "ಕಾನೂನು ಮಾಪನಶಾಸ್ತ್ರ ಅನುಸರಣೆ ತಪಾಸಣಾ ವರದಿ — ನಿಯಮಗಳು, 2011",
+        "footer_confidential": "ಗೌಪ್ಯ — ಕಾನೂನು ಮಾಪನಶಾಸ್ತ್ರ ತಪಾಸಣಾ ದಾಖಲೆ | ಮೆಟ್ರಿಸ್ಕ್ಯಾನ್-AI",
+        "page_x_of_y": "ಪುಟ {page} / {total}",
+        "pass": "✓ ಪಾಸಾಗಿದೆ (PASS)",
+        "fail": "✕ ವಿಫಲವಾಗಿದೆ (FAIL)",
+        "review": "! ಪರಿಶೀಲನೆ (REVIEW)",
+        "na": "— ಅನ್ವಯಿಸುವುದಿಲ್ಲ",
+        "out_of_scope": "— ವ್ಯಾಪ್ತಿಯಿಂದ ಹೊರಗಿದೆ",
+        "not_declared": "ಘೋಷಿಸಲಾಗಿಲ್ಲ",
+        "not_detected": "ಪತ್ತೆಯಾಗಿಲ್ಲ",
+        "not_applicable": "ಅನ್ವಯಿಸುವುದಿಲ್ಲ / ಘೋಷಿಸಲಾಗಿಲ್ಲ",
+    },
+}
+
 
 # ==============================================================================
 # REPORTLAB NUMBERED CANVAS (Page X of Y & Running Headers/Footers)
@@ -40,11 +659,13 @@ class NumberedCanvas(canvas.Canvas):
     """
     Two-pass canvas to dynamically compute and stamp total page count (Page X of Y)
     along with running header on pages 2+ and running footer on all pages.
+    Supports localized multi-language text using Unicode fonts.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._saved_page_states = []
+        self.lang = "en"
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
@@ -52,6 +673,7 @@ class NumberedCanvas(canvas.Canvas):
 
     def save(self):
         num_pages = len(self._saved_page_states)
+        _ensure_fonts_registered()
         for state in self._saved_page_states:
             self.__dict__.update(state)
             self.draw_page_decorations(num_pages)
@@ -60,20 +682,24 @@ class NumberedCanvas(canvas.Canvas):
 
     def draw_page_decorations(self, page_count):
         self.saveState()
-        self.setFont("Helvetica", 7.5)
+        t = COMPLIANCE_REPORT_TRANSLATIONS.get(self.lang, COMPLIANCE_REPORT_TRANSLATIONS["en"])
+        font_name = REGULAR_FONT if self.lang != "en" else "Helvetica"
+        self.setFont(font_name, 7.5)
         self.setFillColor(colors.HexColor("#64748b"))
+
+        page_str = t.get("page_x_of_y", "Page {page} of {total}").format(page=self._pageNumber, total=page_count)
 
         # Running Header (pages 2+)
         if self._pageNumber > 1:
             self.drawString(
                 36,
                 812,
-                "LEGAL METROLOGY COMPLIANCE INSPECTION REPORT — RULES, 2011",
+                t.get("running_header", "LEGAL METROLOGY COMPLIANCE INSPECTION REPORT — RULES, 2011"),
             )
             self.drawRightString(
                 559,
                 812,
-                f"Page {self._pageNumber} of {page_count}",
+                page_str,
             )
 
         # Running Footer (all pages)
@@ -84,14 +710,22 @@ class NumberedCanvas(canvas.Canvas):
         self.drawString(
             36,
             32,
-            "CONFIDENTIAL — Legal Metrology Inspection Record | MetriScan-AI Compliance System",
+            t.get("footer_confidential", "CONFIDENTIAL — Legal Metrology Inspection Record | MetriScan-AI Compliance System"),
         )
         self.drawRightString(
             559,
             32,
-            f"Page {self._pageNumber} of {page_count}",
+            page_str,
         )
         self.restoreState()
+
+
+def _make_canvas_class(lang_code: str):
+    class LocalizedNumberedCanvas(NumberedCanvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.lang = lang_code
+    return LocalizedNumberedCanvas
 
 
 # ==============================================================================
@@ -110,13 +744,20 @@ def _clean_text(val: Any) -> str:
     )
 
 
-def _safe_str(val: Any, default: str = "Not Detected") -> str:
+def _safe_str(val: Any, default: str = "Not Detected", lang: str = "en") -> str:
+    t = COMPLIANCE_REPORT_TRANSLATIONS.get(lang, COMPLIANCE_REPORT_TRANSLATIONS["en"])
     if val is None:
-        return default
+        return t.get("not_detected", default) if default == "Not Detected" else t.get("not_declared", default)
     if isinstance(val, str):
         trimmed = val.strip()
         if not trimmed or trimmed.lower() in ("null", "none"):
-            return default
+            return t.get("not_detected", default) if default == "Not Detected" else t.get("not_declared", default)
+        if trimmed == "Not Detected":
+            return t.get("not_detected", "Not Detected")
+        if trimmed == "Not Declared":
+            return t.get("not_declared", "Not Declared")
+        if "Not Applicable" in trimmed:
+            return t.get("not_applicable", "Not Applicable / Not Declared")
         return _clean_text(trimmed)
     if isinstance(val, (int, float)):
         return str(val)
@@ -126,18 +767,19 @@ def _safe_str(val: Any, default: str = "Not Detected") -> str:
     return _clean_text(val)
 
 
-def _get_status_icon(status: str) -> str:
+def _get_status_icon(status: str, lang: str = "en") -> str:
+    t = COMPLIANCE_REPORT_TRANSLATIONS.get(lang, COMPLIANCE_REPORT_TRANSLATIONS["en"])
     st = str(status).upper()
     if st == "PASS":
-        return "✓ PASS"
+        return t.get("pass", "✓ PASS")
     elif st == "FAIL":
-        return "✕ FAIL"
+        return t.get("fail", "✕ FAIL")
     elif st == "REVIEW":
-        return "! REVIEW"
+        return t.get("review", "! REVIEW")
     elif st in ("NOT_APPLICABLE", "NOT APPLICABLE", "N/A"):
-        return "— N/A"
+        return t.get("na", "— N/A")
     elif st in ("OUT_OF_SCOPE", "OUT OF SCOPE"):
-        return "— OUT OF SCOPE"
+        return t.get("out_of_scope", "— OUT OF SCOPE")
     return status
 
 
@@ -563,7 +1205,7 @@ def _build_recommended_actions(rules: List[Dict[str, Any]]) -> List[str]:
 # PDF GENERATOR (EXACT 4-PAGE COMPLIANCE REPORT)
 # ==============================================================================
 
-def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
+def generate_compliance_pdf(payload: Dict[str, Any], language: str = "en") -> bytes:
     """
     Generates a high-quality, print-friendly Legal Metrology Compliance Report in PDF format.
     Structured into exactly 4 pages matching the reference inspection report format:
@@ -571,8 +1213,18 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
       Page 2: Items Requiring Attention (Items 2-11), Visual Inspection Summary, Rule Compliance Summary (Rules 2-6(1)(aa))
       Page 3: Rule Compliance Summary (Rules 6(1)(b) through 24)
       Page 4: Rule Compliance Summary (Rules 25+), Key OCR Evidence, Recommended Actions, Inspector Sign-off
+    Supports multi-language rendering (English, Marathi, Hindi, Telugu, Tamil, Kannada) using registered Unicode fonts.
     """
     data = _extract_report_data(payload)
+    lang = (language or payload.get("language") or "en").lower()
+    if lang not in COMPLIANCE_REPORT_TRANSLATIONS:
+        lang = "en"
+    t = COMPLIANCE_REPORT_TRANSLATIONS[lang]
+    _ensure_fonts_registered()
+
+    active_bold = BOLD_FONT if lang != "en" else "Helvetica-Bold"
+    active_regular = REGULAR_FONT if lang != "en" else "Helvetica"
+
     pdata = data["product_data"]
     overall_status = data["overall_status"]
     counts = data["counts"]
@@ -595,7 +1247,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     h1_style = ParagraphStyle(
         "ReportH1",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=14,
         leading=17,
         textColor=colors.HexColor("#0f172a"),
@@ -605,7 +1257,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     sub_header_style = ParagraphStyle(
         "ReportSubHeader",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=8,
         leading=10,
         textColor=colors.HexColor("#1d4ed8"),
@@ -614,7 +1266,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     sub_text_style = ParagraphStyle(
         "ReportSubText",
         parent=styles["Normal"],
-        fontName="Helvetica",
+        fontName=active_regular,
         fontSize=7.5,
         leading=9.5,
         textColor=colors.HexColor("#64748b"),
@@ -623,7 +1275,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     section_title_style = ParagraphStyle(
         "SectionTitle",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor("#0f172a"),
@@ -634,7 +1286,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     meta_label = ParagraphStyle(
         "MetaLabel",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=7.5,
         leading=9.5,
         textColor=colors.HexColor("#475569"),
@@ -643,7 +1295,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     meta_val = ParagraphStyle(
         "MetaVal",
         parent=styles["Normal"],
-        fontName="Helvetica",
+        fontName=active_regular,
         fontSize=7.5,
         leading=9.5,
         textColor=colors.HexColor("#0f172a"),
@@ -652,7 +1304,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     meta_right = ParagraphStyle(
         "MetaRight",
         parent=styles["Normal"],
-        fontName="Helvetica",
+        fontName=active_regular,
         fontSize=7.5,
         leading=9.5,
         textColor=colors.HexColor("#0f172a"),
@@ -662,7 +1314,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     cell_style = ParagraphStyle(
         "TableCell",
         parent=styles["Normal"],
-        fontName="Helvetica",
+        fontName=active_regular,
         fontSize=7,
         leading=8.5,
         textColor=colors.HexColor("#1e293b"),
@@ -671,7 +1323,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     cell_bold = ParagraphStyle(
         "TableCellBold",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=7,
         leading=8.5,
         textColor=colors.HexColor("#0f172a"),
@@ -680,7 +1332,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     cell_header = ParagraphStyle(
         "TableHeader",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=7.5,
         leading=9.5,
         textColor=colors.HexColor("#ffffff"),
@@ -696,19 +1348,19 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     # Header & Meta Banner
     header_data = [
         [
-            Paragraph("LEGAL METROLOGY COMPLIANCE REPORT", sub_header_style),
-            Paragraph(f"<b>Inspection ID:</b> {data['inspection_id']}", meta_right),
+            Paragraph(t["header_title"], sub_header_style),
+            Paragraph(f"<b>{t['inspection_id']}:</b> {data['inspection_id']}", meta_right),
         ],
         [
-            Paragraph("INSPECTION SUMMARY", h1_style),
-            Paragraph(f"<b>Date:</b> {data['formatted_date']}", meta_right),
+            Paragraph(t["inspection_summary"], h1_style),
+            Paragraph(f"<b>{t['date']}:</b> {data['formatted_date']}", meta_right),
         ],
         [
             Paragraph(
-                "Evaluation under Legal Metrology (Packaged Commodities) Rules, 2011 (as amended)",
+                t["legal_eval_rule"],
                 sub_text_style,
             ),
-            Paragraph(f"<b>File:</b> {data['filename']}", meta_right),
+            Paragraph(f"<b>{t['file']}:</b> {data['filename']}", meta_right),
         ],
     ]
     t_header = Table(header_data, colWidths=[335, 188])
@@ -733,14 +1385,12 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     status_border = colors.HexColor("#a7f3d0") if overall_status == "PASS" else (
         colors.HexColor("#fecaca") if overall_status == "FAIL" else colors.HexColor("#fde68a")
     )
-    status_symbol = "✓ PASS" if overall_status == "PASS" else (
-        "✕ FAIL" if overall_status == "FAIL" else "! REVIEW"
-    )
+    status_symbol = _get_status_icon(overall_status, lang=lang)
 
     verdict_title_style = ParagraphStyle(
         "VerdictTitle",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=8.5,
         leading=11,
         textColor=status_fg,
@@ -749,7 +1399,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     verdict_status_style = ParagraphStyle(
         "VerdictStatus",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName=active_bold,
         fontSize=18,
         leading=22,
         textColor=status_fg,
@@ -758,16 +1408,16 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     verdict_score_style = ParagraphStyle(
         "VerdictScore",
         parent=styles["Normal"],
-        fontName="Helvetica",
+        fontName=active_regular,
         fontSize=7.5,
         leading=10,
         textColor=colors.HexColor("#475569"),
     )
 
     verdict_left = [
-        [Paragraph("FINAL COMPLIANCE VERDICT:", verdict_title_style)],
+        [Paragraph(t["final_verdict"], verdict_title_style)],
         [Paragraph(f"<b>{status_symbol}</b>", verdict_status_style)],
-        [Paragraph(f"Overall Score: <b>{data['score_display']}</b> (Evidence-based evaluation)", verdict_score_style)],
+        [Paragraph(f"{t['overall_score']}: <b>{data['score_display']}</b> ({t['evidence_eval']})", verdict_score_style)],
     ]
     t_verdict_left = Table(verdict_left, colWidths=[225], rowHeights=[12, 24, 12])
     t_verdict_left.setStyle(TableStyle([
@@ -779,7 +1429,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     if chart_buf:
         chart_element = RLImage(chart_buf, width=280, height=72)
     else:
-        chart_element = Paragraph(f"PASS: {counts['pass']} | REVIEW: {counts['review']} | FAIL: {counts['fail']}", cell_style)
+        chart_element = Paragraph(f"{t['pass']}: {counts['pass']} | {t['review']}: {counts['review']} | {t['fail']}: {counts['fail']}", cell_style)
 
     verdict_container = [
         [t_verdict_left, chart_element]
@@ -796,51 +1446,51 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     story.append(Spacer(1, 4))
 
     # Product Information Table
-    story.append(Paragraph("PRODUCT INFORMATION", section_title_style))
+    story.append(Paragraph(t["sec_product_info"], section_title_style))
 
-    pname = _safe_str(pdata.get("product_name"), default="Not Detected")
-    category = _safe_str(pdata.get("product_category") or pdata.get("category"), default="Not Declared")
-    net_qty = _safe_str(pdata.get("net_quantity"), default="Not Detected")
-    mrp = _safe_str(pdata.get("mrp"), default="Not Detected")
-    batch_no = _safe_str(pdata.get("batch_number"), default="Not Detected")
-    packed_on = _safe_str(pdata.get("packed_on"), default="Not Detected")
-    mfg_date = _safe_str(pdata.get("date_of_manufacture") or pdata.get("manufactured_on"), default="Not Detected")
-    best_before = _safe_str(pdata.get("best_before"), default="Not Detected")
-    use_by = _safe_str(pdata.get("use_by") or pdata.get("expiry_date"), default="Not Detected")
-    mfg_packer = _safe_str(pdata.get("manufacturer_or_packer"), default="Not Detected")
-    address = _safe_str(pdata.get("address"), default="Not Detected")
-    marketed_by = _safe_str(pdata.get("marketed_by"), default="Not Detected")
-    consumer_care = _safe_str(pdata.get("consumer_contact") or pdata.get("consumer_care"), default="Not Detected")
-    country_origin = _safe_str(pdata.get("country_of_origin"), default="Not Applicable / Not Declared")
+    pname = _safe_str(pdata.get("product_name"), default="Not Detected", lang=lang)
+    category = _safe_str(pdata.get("product_category") or pdata.get("category"), default="Not Declared", lang=lang)
+    net_qty = _safe_str(pdata.get("net_quantity"), default="Not Detected", lang=lang)
+    mrp = _safe_str(pdata.get("mrp"), default="Not Detected", lang=lang)
+    batch_no = _safe_str(pdata.get("batch_number"), default="Not Detected", lang=lang)
+    packed_on = _safe_str(pdata.get("packed_on"), default="Not Detected", lang=lang)
+    mfg_date = _safe_str(pdata.get("date_of_manufacture") or pdata.get("manufactured_on"), default="Not Detected", lang=lang)
+    best_before = _safe_str(pdata.get("best_before"), default="Not Detected", lang=lang)
+    use_by = _safe_str(pdata.get("use_by") or pdata.get("expiry_date"), default="Not Detected", lang=lang)
+    mfg_packer = _safe_str(pdata.get("manufacturer_or_packer"), default="Not Detected", lang=lang)
+    address = _safe_str(pdata.get("address"), default="Not Detected", lang=lang)
+    marketed_by = _safe_str(pdata.get("marketed_by"), default="Not Detected", lang=lang)
+    consumer_care = _safe_str(pdata.get("consumer_contact") or pdata.get("consumer_care"), default="Not Detected", lang=lang)
+    country_origin = _safe_str(pdata.get("country_of_origin"), default="Not Applicable / Not Declared", lang=lang)
 
     prod_rows = [
         [
-            Paragraph("Product Name", meta_label), Paragraph(pname, meta_val),
-            Paragraph("Product Category", meta_label), Paragraph(category, meta_val),
+            Paragraph(t["prod_name"], meta_label), Paragraph(pname, meta_val),
+            Paragraph(t["prod_category"], meta_label), Paragraph(category, meta_val),
         ],
         [
-            Paragraph("Net Quantity", meta_label), Paragraph(net_qty, meta_val),
-            Paragraph("Retail Price (MRP)", meta_label), Paragraph(mrp, meta_val),
+            Paragraph(t["net_quantity"], meta_label), Paragraph(net_qty, meta_val),
+            Paragraph(t["retail_price"], meta_label), Paragraph(mrp, meta_val),
         ],
         [
-            Paragraph("Batch / Lot No.", meta_label), Paragraph(batch_no, meta_val),
-            Paragraph("Packed On Date", meta_label), Paragraph(packed_on, meta_val),
+            Paragraph(t["batch_no"], meta_label), Paragraph(batch_no, meta_val),
+            Paragraph(t["packed_on"], meta_label), Paragraph(packed_on, meta_val),
         ],
         [
-            Paragraph("Manufacturing Date", meta_label), Paragraph(mfg_date, meta_val),
-            Paragraph("Best Before", meta_label), Paragraph(best_before, meta_val),
+            Paragraph(t["mfg_date"], meta_label), Paragraph(mfg_date, meta_val),
+            Paragraph(t["best_before"], meta_label), Paragraph(best_before, meta_val),
         ],
         [
-            Paragraph("Use By / Expiry", meta_label), Paragraph(use_by, meta_val),
-            Paragraph("Country of Origin", meta_label), Paragraph(country_origin, meta_val),
+            Paragraph(t["use_by"], meta_label), Paragraph(use_by, meta_val),
+            Paragraph(t["country_origin"], meta_label), Paragraph(country_origin, meta_val),
         ],
         [
-            Paragraph("Manufacturer / Packer", meta_label), Paragraph(mfg_packer, meta_val),
-            Paragraph("Marketed By", meta_label), Paragraph(marketed_by, meta_val),
+            Paragraph(t["manufacturer"], meta_label), Paragraph(mfg_packer, meta_val),
+            Paragraph(t["marketed_by"], meta_label), Paragraph(marketed_by, meta_val),
         ],
         [
-            Paragraph("Manufacturer Address", meta_label), Paragraph(address, meta_val),
-            Paragraph("Consumer Contact", meta_label), Paragraph(consumer_care, meta_val),
+            Paragraph(t["address"], meta_label), Paragraph(address, meta_val),
+            Paragraph(t["consumer_contact"], meta_label), Paragraph(consumer_care, meta_val),
         ],
     ]
     t_prod = Table(prod_rows, colWidths=[108, 153, 108, 154])
@@ -856,7 +1506,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     story.append(Spacer(1, 4))
 
     # Mandatory Declarations (Rule 6) Table
-    story.append(Paragraph("MANDATORY DECLARATIONS (RULE 6)", section_title_style))
+    story.append(Paragraph(t["sec_rule6"], section_title_style))
 
     def find_rule(sub_id: str) -> Optional[Dict[str, Any]]:
         for r in rules:
@@ -872,32 +1522,32 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
         usp_detected = "Not Declared"
 
     mand_items = [
-        ("Manufacturer / Packer", "6-01", mfg_packer, "A manufacturer/packer/importer identity and associated address were evaluated."),
-        ("Product Name", "6-03", pname, "Product Name declaration was evaluated."),
-        ("Net Quantity", "6-04", net_qty, "Net quantity declaration was evaluated."),
-        ("Manufacturing / Packing Date", "6-05", (packed_on if packed_on != "Not Detected" else mfg_date), "Relevant date declaration was evaluated."),
-        ("Best Before / Use By", "6-06", (best_before if best_before != "Not Detected" else use_by), "Relevant date declaration was evaluated."),
-        ("MRP (Incl. of all taxes)", "6-07", mrp, "An explicitly labelled MRP declaration was evaluated."),
-        ("Consumer Contact", "6-08", consumer_care, "Consumer care contact details were evaluated."),
-        ("Country of Origin", "6-02", country_origin, "Country of origin declaration was evaluated."),
-        ("Unit Sale Price", "6-10", usp_detected, "A separate unit sale price declaration was evaluated under Rule 6(11)."),
+        (t["col_manuf_packer"], "6-01", mfg_packer, t["eval_manuf"]),
+        (t["col_product_name"], "6-03", pname, t["eval_pname"]),
+        (t["col_net_qty"], "6-04", net_qty, t["eval_net_qty"]),
+        (t["col_mfg_date"], "6-05", (packed_on if packed_on != "Not Detected" else mfg_date), t["eval_mfg_date"]),
+        (t["col_best_before"], "6-06", (best_before if best_before != "Not Detected" else use_by), t["eval_exp_date"]),
+        (t["col_mrp"], "6-07", mrp, t["eval_mrp"]),
+        (t["col_consumer_contact"], "6-08", consumer_care, t["eval_consumer"]),
+        (t["col_country_origin"], "6-02", country_origin, t["eval_country"]),
+        (t["col_unit_sale_price"], "6-10", usp_detected, t["eval_usp"]),
     ]
 
     mand_rows = [
         [
-            Paragraph("<b>Declaration / Check</b>", cell_header),
-            Paragraph("<b>Status</b>", cell_header),
-            Paragraph("<b>Detected Value</b>", cell_header),
-            Paragraph("<b>Evaluation / Short Explanation</b>", cell_header),
+            Paragraph(f"<b>{t['col_declaration']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_status']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_detected']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_explanation']}</b>", cell_header),
         ]
     ]
 
     for label, code, def_val, def_exp in mand_items:
         r = find_rule(code)
         st = r.get("status", "REVIEW") if r else ("PASS" if def_val not in ("Not Detected", "Not Applicable / Not Declared") else "REVIEW")
-        if label == "Country of Origin":
+        if label == t["col_country_origin"]:
             st = "NOT_APPLICABLE"
-        st_icon = _get_status_icon(st)
+        st_icon = _get_status_icon(st, lang=lang)
         reason = _clean_text((r.get("reason") if r else def_exp) or def_exp)
         raw_val = _extract_rule_value(r) or def_val
         val = _format_detected_val(raw_val, default=def_val)
@@ -941,14 +1591,14 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
             }
         ]
 
-    story.append(Paragraph("ITEMS REQUIRING ATTENTION", section_title_style))
+    story.append(Paragraph(t["sec_attention"], section_title_style))
 
     att_p1_rows = [
         [
-            Paragraph("<b>Rule & Requirement</b>", cell_header),
-            Paragraph("<b>Status</b>", cell_header),
-            Paragraph("<b>Evidence</b>", cell_header),
-            Paragraph("<b>Recommended Action</b>", cell_header),
+            Paragraph(f"<b>{t['col_rule_req']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_status']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_evidence']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_action']}</b>", cell_header),
         ]
     ]
 
@@ -962,7 +1612,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
 
     att_p1_rows.append([
         Paragraph(f"<b>{rnum1}</b><br/>{rname1}", cell_style),
-        Paragraph(f"<font color='{st1_color}'><b>{_get_status_icon(st1)}</b></font>", cell_style),
+        Paragraph(f"<font color='{st1_color}'><b>{_get_status_icon(st1, lang=lang)}</b></font>", cell_style),
         Paragraph(ev1, cell_style),
         Paragraph(sug1, cell_style),
     ])
@@ -999,7 +1649,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
 
             att_p2_rows.append([
                 Paragraph(f"<b>{rnum}</b><br/>{rname}", cell_style),
-                Paragraph(f"<font color='{st_color}'><b>{_get_status_icon(st)}</b></font>", cell_style),
+                Paragraph(f"<font color='{st_color}'><b>{_get_status_icon(st, lang=lang)}</b></font>", cell_style),
                 Paragraph(evidence_text, cell_style),
                 Paragraph(suggestion, cell_style),
             ])
@@ -1016,7 +1666,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
         story.append(Spacer(1, 4))
 
     # Visual Inspection Summary Table
-    story.append(Paragraph("VISUAL INSPECTION SUMMARY", section_title_style))
+    story.append(Paragraph(t["sec_visual"], section_title_style))
 
     text_size_info = visual.get("text_size") or {}
     readability_info = visual.get("readability") or {}
@@ -1042,26 +1692,26 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
 
     vis_rows = [
         [
-            Paragraph("OCR Mean Confidence", meta_label), Paragraph(ocr_conf_str, meta_val),
-            Paragraph("Median Text Height", meta_label), Paragraph(f"{med_height} px", meta_val),
+            Paragraph(t["ocr_confidence"], meta_label), Paragraph(ocr_conf_str, meta_val),
+            Paragraph(t["median_height"], meta_label), Paragraph(f"{med_height} px", meta_val),
         ],
         [
-            Paragraph("Detected Text Blocks", meta_label), Paragraph(str(blocks_count), meta_val),
-            Paragraph("Min / Max Height", meta_label), Paragraph(f"{min_height} / {max_height} px", meta_val),
+            Paragraph(t["text_blocks"], meta_label), Paragraph(str(blocks_count), meta_val),
+            Paragraph(t["min_max_height"], meta_label), Paragraph(f"{min_height} / {max_height} px", meta_val),
         ],
         [
-            Paragraph("Bounding Boxes Mapped", meta_label), Paragraph(str(bbox_count), meta_val),
-            Paragraph("Local Image Contrast", meta_label), Paragraph(contrast_str, meta_val),
+            Paragraph(t["mapped_bboxes"], meta_label), Paragraph(str(bbox_count), meta_val),
+            Paragraph(t["local_contrast"], meta_label), Paragraph(contrast_str, meta_val),
         ],
         [
-            Paragraph("Text Size (Rule 7):", meta_label),
-            Paragraph(f"<font color='#d97706'><b>{_get_status_icon(ts_status)}</b></font>", cell_style),
-            Paragraph("Placement (Rule 8):", meta_label),
-            Paragraph(f"<font color='#d97706'><b>{_get_status_icon(pl_status)}</b></font>", cell_style),
+            Paragraph(f"{t['text_size_rule']}:", meta_label),
+            Paragraph(f"<font color='#d97706'><b>{_get_status_icon(ts_status, lang=lang)}</b></font>", cell_style),
+            Paragraph(f"{t['placement_rule']}:", meta_label),
+            Paragraph(f"<font color='#d97706'><b>{_get_status_icon(pl_status, lang=lang)}</b></font>", cell_style),
         ],
         [
-            Paragraph("Readability (Rule 9):", meta_label),
-            Paragraph(f"<font color='#d97706'><b>{_get_status_icon(rd_status)}</b></font>", cell_style),
+            Paragraph(f"{t['readability_rule']}:", meta_label),
+            Paragraph(f"<font color='#d97706'><b>{_get_status_icon(rd_status, lang=lang)}</b></font>", cell_style),
             Paragraph("", meta_label), Paragraph("", meta_val),
         ],
     ]
@@ -1078,16 +1728,16 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     story.append(Spacer(1, 4))
 
     # Rule Compliance Summary (All Rules) - First Slice (6 rules)
-    story.append(Paragraph("RULE COMPLIANCE SUMMARY (ALL RULES)", section_title_style))
+    story.append(Paragraph(t["sec_compliance_summary"], section_title_style))
 
     p2_rules = rules[:6] if len(rules) >= 6 else rules
     p2_rule_rows = [
         [
-            Paragraph("<b>Rule</b>", cell_header),
-            Paragraph("<b>Requirement</b>", cell_header),
-            Paragraph("<b>Status</b>", cell_header),
-            Paragraph("<b>Evidence / Summary</b>", cell_header),
-            Paragraph("<b>Recommendation</b>", cell_header),
+            Paragraph(f"<b>{t['col_rule']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_requirement']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_status']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_findings']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_recommendation']}</b>", cell_header),
         ]
     ]
 
@@ -1103,7 +1753,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
         p2_rule_rows.append([
             Paragraph(f"<b>{rnum}</b>", cell_bold),
             Paragraph(req, cell_style),
-            Paragraph(f"<font color='{c_hex}'><b>{_get_status_icon(st)}</b></font>", cell_style),
+            Paragraph(f"<font color='{c_hex}'><b>{_get_status_icon(st, lang=lang)}</b></font>", cell_style),
             Paragraph(reason, cell_style),
             Paragraph(suggestion, cell_style),
         ])
@@ -1142,7 +1792,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
             p3_rule_rows.append([
                 Paragraph(f"<b>{rnum}</b>", cell_bold),
                 Paragraph(req, cell_style),
-                Paragraph(f"<font color='{c_hex}'><b>{_get_status_icon(st)}</b></font>", cell_style),
+                Paragraph(f"<font color='{c_hex}'><b>{_get_status_icon(st, lang=lang)}</b></font>", cell_style),
                 Paragraph(reason, cell_style),
                 Paragraph(suggestion, cell_style),
             ])
@@ -1180,7 +1830,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
             p4_rule_rows.append([
                 Paragraph(f"<b>{rnum}</b>", cell_bold),
                 Paragraph(req, cell_style),
-                Paragraph(f"<font color='{c_hex}'><b>{_get_status_icon(st)}</b></font>", cell_style),
+                Paragraph(f"<font color='{c_hex}'><b>{_get_status_icon(st, lang=lang)}</b></font>", cell_style),
                 Paragraph(reason, cell_style),
                 Paragraph(suggestion, cell_style),
             ])
@@ -1197,17 +1847,17 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
         story.append(Spacer(1, 4))
 
     # Key OCR & Visual Evidence Table
-    story.append(Paragraph("KEY OCR & VISUAL EVIDENCE", section_title_style))
+    story.append(Paragraph(t["sec_ocr_evidence"], section_title_style))
 
     ocr_items = data.get("ocr_details") or []
     target_specs = _build_target_specs(pdata, pname, net_qty, packed_on, mfg_date, best_before, use_by, mrp, address)
 
     ev_rows = [
         [
-            Paragraph("<b>Target Declaration</b>", cell_header),
-            Paragraph("<b>Extracted Text</b>", cell_header),
-            Paragraph("<b>Confidence</b>", cell_header),
-            Paragraph("<b>Bounding Box (X1, Y1, X2, Y2)</b>", cell_header),
+            Paragraph(f"<b>{t['col_target_rule']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_extracted_text']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_confidence']}</b>", cell_header),
+            Paragraph(f"<b>{t['col_bbox']}</b>", cell_header),
         ]
     ]
 
@@ -1237,7 +1887,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
                 conf_str = "Detected"
             bbox_str = str(bbox_val)
         else:
-            text_str = "Not Detected"
+            text_str = t.get("not_detected", "Not Detected")
             conf_str = "N/A"
             bbox_str = "-"
 
@@ -1261,7 +1911,7 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     story.append(Spacer(1, 4))
 
     # Recommended Actions for Inspector
-    story.append(Paragraph("RECOMMENDED ACTIONS FOR INSPECTOR", section_title_style))
+    story.append(Paragraph(t["sec_recs"], section_title_style))
 
     recs = _build_recommended_actions(rules)
 
@@ -1276,30 +1926,30 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     story.append(Spacer(1, 4))
 
     # Inspector Remarks & Final Determination
-    story.append(Paragraph("INSPECTOR REMARKS & FINAL DETERMINATION", section_title_style))
+    story.append(Paragraph(t["sec_signoff"], section_title_style))
     story.append(
         Paragraph(
-            "<b>Inspector Remarks:</b><br/>"
+            f"<b>{t['remarks_label']}</b><br/>"
             "____________________________________________________________________________________________<br/>"
             "____________________________________________________________________________________________<br/>"
             "____________________________________________________________________________________________",
-            ParagraphStyle("Remarks", parent=styles["Normal"], fontName="Helvetica", fontSize=7.5, leading=12, textColor=colors.HexColor("#1e293b")),
+            ParagraphStyle("Remarks", parent=styles["Normal"], fontName=active_regular, fontSize=7.5, leading=12, textColor=colors.HexColor("#1e293b")),
         )
     )
     story.append(Spacer(1, 4))
 
     signoff_table_data = [
         [
-            Paragraph("<b>Final Inspection Decision:</b>", meta_label),
+            Paragraph(f"<b>{t['final_decision']}</b>", meta_label),
             Paragraph("[ ] PASS &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [ ] FAIL &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [ ] REVIEW", meta_label),
         ],
         [
-            Paragraph("<b>Inspector Name:</b> ___________________________", cell_style),
-            Paragraph("<b>Designation:</b> ___________________________", cell_style),
+            Paragraph(f"<b>{t['inspector_name']}</b> ___________________________", cell_style),
+            Paragraph(f"<b>{t['designation']}</b> ___________________________", cell_style),
         ],
         [
-            Paragraph("<b>Inspection Date:</b> ___________________________", cell_style),
-            Paragraph("<b>Signature:</b> ___________________________", cell_style),
+            Paragraph(f"<b>{t['inspection_date']}</b> ___________________________", cell_style),
+            Paragraph(f"<b>{t['signature']}</b> ___________________________", cell_style),
         ],
     ]
     t_signoff = Table(signoff_table_data, colWidths=[261, 262])
@@ -1312,8 +1962,9 @@ def generate_compliance_pdf(payload: Dict[str, Any]) -> bytes:
     ]))
     story.append(t_signoff)
 
-    # Build PDF with two-pass NumberedCanvas
-    doc.build(story, canvasmaker=NumberedCanvas)
+    # Build PDF with two-pass localized NumberedCanvas
+    canvas_cls = _make_canvas_class(lang)
+    doc.build(story, canvasmaker=canvas_cls)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
@@ -1345,12 +1996,18 @@ def _set_table_margins(table, top=80, bottom=80, left=100, right=100):
         tblPr[0].append(tblCellMar)
 
 
-def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
+def generate_compliance_docx(payload: Dict[str, Any], language: str = "en") -> bytes:
     """
     Generates a fully editable Legal Metrology Compliance Report in DOCX format.
     Mirrors the exact 4-page sections and results of the PDF report with genuine editable fields.
+    Supports multi-language rendering (English, Marathi, Hindi, Telugu, Tamil, Kannada).
     """
     data = _extract_report_data(payload)
+    lang = (language or payload.get("language") or "en").lower()
+    if lang not in COMPLIANCE_REPORT_TRANSLATIONS:
+        lang = "en"
+    t = COMPLIANCE_REPORT_TRANSLATIONS[lang]
+
     pdata = data["product_data"]
     overall_status = data["overall_status"]
     counts = data["counts"]
@@ -1358,6 +2015,13 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     visual = data["visual_analysis"]
 
     doc = docx.Document()
+    if lang != "en":
+        try:
+            style = doc.styles['Normal']
+            font = style.font
+            font.name = 'Nirmala UI'
+        except Exception:
+            pass
 
     # Set page margins to 0.5 inch (compact & professional)
     for section in doc.sections:
@@ -1370,19 +2034,17 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     # PAGE 1: HEADER & PRODUCT INFO & RULE 6 DECLARATIONS
     # --------------------------------------------------------------------------
     title_p = doc.add_paragraph()
-    sub_run = title_p.add_run("LEGAL METROLOGY COMPLIANCE REPORT\n")
+    sub_run = title_p.add_run(f"{t['header_title']}\n")
     sub_run.font.size = Pt(8.5)
     sub_run.font.bold = True
     sub_run.font.color.rgb = RGBColor(29, 78, 216)
 
-    h1_run = title_p.add_run("INSPECTION SUMMARY\n")
+    h1_run = title_p.add_run(f"{t['inspection_summary']}\n")
     h1_run.font.size = Pt(15)
     h1_run.font.bold = True
     h1_run.font.color.rgb = RGBColor(15, 23, 42)
 
-    leg_run = title_p.add_run(
-        "Evaluation under Legal Metrology (Packaged Commodities) Rules, 2011 (as amended)"
-    )
+    leg_run = title_p.add_run(t["legal_eval_rule"])
     leg_run.font.size = Pt(8)
     leg_run.font.color.rgb = RGBColor(100, 116, 139)
 
@@ -1390,10 +2052,10 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     meta_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_margins(meta_table, 50, 50, 80, 80)
 
-    meta_table.rows[0].cells[0].paragraphs[0].add_run(f"Inspection ID: {data['inspection_id']}").bold = True
-    meta_table.rows[0].cells[1].paragraphs[0].add_run(f"Date: {data['formatted_date']}").bold = True
-    meta_table.rows[1].cells[0].paragraphs[0].add_run(f"File: {data['filename']}")
-    meta_table.rows[1].cells[1].paragraphs[0].add_run(f"Evaluated Rules: {len(rules)}")
+    meta_table.rows[0].cells[0].paragraphs[0].add_run(f"{t['inspection_id']}: {data['inspection_id']}").bold = True
+    meta_table.rows[0].cells[1].paragraphs[0].add_run(f"{t['date']}: {data['formatted_date']}").bold = True
+    meta_table.rows[1].cells[0].paragraphs[0].add_run(f"{t['file']}: {data['filename']}")
+    meta_table.rows[1].cells[1].paragraphs[0].add_run(f"{t['evaluated_rules']}: {len(rules)}")
 
     doc.add_paragraph().paragraph_format.space_after = Pt(4)
 
@@ -1408,8 +2070,8 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     c_left = verdict_table.rows[0].cells[0]
     p_v = c_left.paragraphs[0]
-    p_v.add_run("FINAL COMPLIANCE VERDICT:\n").font.size = Pt(9)
-    r_stat = p_v.add_run(f"{_get_status_icon(overall_status)}\n")
+    p_v.add_run(f"{t['final_verdict']}\n").font.size = Pt(9)
+    r_stat = p_v.add_run(f"{_get_status_icon(overall_status, lang=lang)}\n")
     r_stat.font.size = Pt(20)
     r_stat.font.bold = True
     if overall_status == "PASS":
@@ -1419,7 +2081,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     else:
         r_stat.font.color.rgb = RGBColor(217, 119, 6)
 
-    p_v.add_run(f"Overall Score: {data['score_display']} (Evidence-based evaluation)").font.size = Pt(8.5)
+    p_v.add_run(f"{t['overall_score']}: {data['score_display']} ({t['evidence_eval']})").font.size = Pt(8.5)
 
     c_right = verdict_table.rows[0].cells[1]
     chart_buf_docx = _generate_pie_chart_image(counts)
@@ -1430,7 +2092,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
         run.add_picture(chart_buf_docx, width=Inches(3.2))
     else:
         p_b = c_right.paragraphs[0]
-        p_b.add_run("Rule Breakdown\n").font.size = Pt(9)
+        p_b.add_run(f"{t['rule_breakdown']}\n").font.size = Pt(9)
         p_b.runs[0].font.bold = True
         p_b.add_run(
             f"PASS: {counts['pass']} | FAIL: {counts['fail']} | REVIEW: {counts['review']} | N/A: {counts['na']} | OUT OF SCOPE: {counts['oos']}"
@@ -1440,34 +2102,34 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     # Product Information
     p_sec1 = doc.add_paragraph()
-    r_sec1 = p_sec1.add_run("PRODUCT INFORMATION")
+    r_sec1 = p_sec1.add_run(t["sec_product_info"])
     r_sec1.font.bold = True
     r_sec1.font.size = Pt(10)
     p_sec1.paragraph_format.space_after = Pt(2)
 
-    pname = _safe_str(pdata.get("product_name"), default="Not Detected")
-    category = _safe_str(pdata.get("product_category") or pdata.get("category"), default="Not Declared")
-    net_qty = _safe_str(pdata.get("net_quantity"), default="Not Detected")
-    mrp = _safe_str(pdata.get("mrp"), default="Not Detected")
-    batch_no = _safe_str(pdata.get("batch_number"), default="Not Detected")
-    packed_on = _safe_str(pdata.get("packed_on"), default="Not Detected")
-    mfg_date = _safe_str(pdata.get("date_of_manufacture") or pdata.get("manufactured_on"), default="Not Detected")
-    best_before = _safe_str(pdata.get("best_before"), default="Not Detected")
-    use_by = _safe_str(pdata.get("use_by") or pdata.get("expiry_date"), default="Not Detected")
-    mfg_packer = _safe_str(pdata.get("manufacturer_or_packer"), default="Not Detected")
-    address = _safe_str(pdata.get("address"), default="Not Detected")
-    marketed_by = _safe_str(pdata.get("marketed_by"), default="Not Detected")
-    consumer_care = _safe_str(pdata.get("consumer_contact") or pdata.get("consumer_care"), default="Not Detected")
-    country_origin = _safe_str(pdata.get("country_of_origin"), default="Not Applicable / Not Declared")
+    pname = _safe_str(pdata.get("product_name"), default="Not Detected", lang=lang)
+    category = _safe_str(pdata.get("product_category") or pdata.get("category"), default="Not Declared", lang=lang)
+    net_qty = _safe_str(pdata.get("net_quantity"), default="Not Detected", lang=lang)
+    mrp = _safe_str(pdata.get("mrp"), default="Not Detected", lang=lang)
+    batch_no = _safe_str(pdata.get("batch_number"), default="Not Detected", lang=lang)
+    packed_on = _safe_str(pdata.get("packed_on"), default="Not Detected", lang=lang)
+    mfg_date = _safe_str(pdata.get("date_of_manufacture") or pdata.get("manufactured_on"), default="Not Detected", lang=lang)
+    best_before = _safe_str(pdata.get("best_before"), default="Not Detected", lang=lang)
+    use_by = _safe_str(pdata.get("use_by") or pdata.get("expiry_date"), default="Not Detected", lang=lang)
+    mfg_packer = _safe_str(pdata.get("manufacturer_or_packer"), default="Not Detected", lang=lang)
+    address = _safe_str(pdata.get("address"), default="Not Detected", lang=lang)
+    marketed_by = _safe_str(pdata.get("marketed_by"), default="Not Detected", lang=lang)
+    consumer_care = _safe_str(pdata.get("consumer_contact") or pdata.get("consumer_care"), default="Not Detected", lang=lang)
+    country_origin = _safe_str(pdata.get("country_of_origin"), default="Not Applicable / Not Declared", lang=lang)
 
     prod_fields = [
-        ("Product Name", pname, "Product Category", category),
-        ("Net Quantity", net_qty, "Retail Price (MRP)", mrp),
-        ("Batch / Lot No.", batch_no, "Packed On Date", packed_on),
-        ("Manufacturing Date", mfg_date, "Best Before", best_before),
-        ("Use By / Expiry", use_by, "Country of Origin", country_origin),
-        ("Manufacturer / Packer", mfg_packer, "Marketed By", marketed_by),
-        ("Manufacturer Address", address, "Consumer Contact", consumer_care),
+        (t["prod_name"], pname, t["prod_category"], category),
+        (t["net_quantity"], net_qty, t["retail_price"], mrp),
+        (t["batch_no"], batch_no, t["packed_on"], packed_on),
+        (t["mfg_date"], mfg_date, t["best_before"], best_before),
+        (t["use_by"], use_by, t["country_origin"], country_origin),
+        (t["manufacturer"], mfg_packer, t["marketed_by"], marketed_by),
+        (t["address"], address, t["consumer_contact"], consumer_care),
     ]
 
     p_table = doc.add_table(rows=len(prod_fields), cols=4)
@@ -1497,7 +2159,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     # Mandatory Declarations Table
     p_sec2 = doc.add_paragraph()
-    r_sec2 = p_sec2.add_run("MANDATORY DECLARATIONS (RULE 6)")
+    r_sec2 = p_sec2.add_run(t["sec_rule6"])
     r_sec2.font.bold = True
     r_sec2.font.size = Pt(10)
     p_sec2.paragraph_format.space_after = Pt(2)
@@ -1516,22 +2178,22 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
         usp_detected_docx = "Not Declared"
 
     mand_items = [
-        ("Manufacturer / Packer", "6-01", mfg_packer, "A manufacturer/packer/importer identity and associated address were evaluated."),
-        ("Product Name", "6-03", pname, "Product Name declaration was evaluated."),
-        ("Net Quantity", "6-04", net_qty, "Net quantity declaration was evaluated."),
-        ("Manufacturing / Packing Date", "6-05", (packed_on if packed_on != "Not Detected" else mfg_date), "Relevant date declaration was evaluated."),
-        ("Best Before / Use By", "6-06", (best_before if best_before != "Not Detected" else use_by), "Relevant date declaration was evaluated."),
-        ("MRP (Incl. of all taxes)", "6-07", mrp, "An explicitly labelled MRP declaration was evaluated."),
-        ("Consumer Contact", "6-08", consumer_care, "Consumer care contact details were evaluated."),
-        ("Country of Origin", "6-02", country_origin, "Country of origin declaration was evaluated."),
-        ("Unit Sale Price", "6-10", usp_detected_docx, "A separate unit sale price declaration was evaluated under Rule 6(11)."),
+        (t["col_manuf_packer"], "6-01", mfg_packer, t["eval_manuf"]),
+        (t["col_product_name"], "6-03", pname, t["eval_pname"]),
+        (t["col_net_qty"], "6-04", net_qty, t["eval_net_qty"]),
+        (t["col_mfg_date"], "6-05", (packed_on if packed_on != "Not Detected" else mfg_date), t["eval_mfg_date"]),
+        (t["col_best_before"], "6-06", (best_before if best_before != "Not Detected" else use_by), t["eval_exp_date"]),
+        (t["col_mrp"], "6-07", mrp, t["eval_mrp"]),
+        (t["col_consumer_contact"], "6-08", consumer_care, t["eval_consumer"]),
+        (t["col_country_origin"], "6-02", country_origin, t["eval_country"]),
+        (t["col_unit_sale_price"], "6-10", usp_detected_docx, t["eval_usp"]),
     ]
 
     mand_table = doc.add_table(rows=len(mand_items) + 1, cols=4)
     mand_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_margins(mand_table, 50, 50, 60, 60)
 
-    m_headers = ["Declaration / Check", "Status", "Detected Value", "Evaluation / Short Explanation"]
+    m_headers = [t["col_declaration"], t["col_status"], t["col_detected"], t["col_explanation"]]
     for j, h in enumerate(m_headers):
         cell = mand_table.rows[0].cells[j]
         _set_cell_background(cell, "1e3a8a")
@@ -1544,7 +2206,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     for i, (label, code, def_val, def_exp) in enumerate(mand_items):
         r_item = find_rule_docx(code)
         st = r_item.get("status", "REVIEW") if r_item else ("PASS" if def_val not in ("Not Detected", "Not Applicable / Not Declared") else "REVIEW")
-        if label == "Country of Origin":
+        if label == t["col_country_origin"]:
             st = "NOT_APPLICABLE"
         reason = _clean_text((r_item.get("reason") if r_item else def_exp) or def_exp)
         raw_val = _extract_rule_value(r_item) or def_val
@@ -1555,7 +2217,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
         row.cells[0].paragraphs[0].runs[0].font.size = Pt(7.5)
 
         p_st = row.cells[1].paragraphs[0]
-        r_st = p_st.add_run(_get_status_icon(st))
+        r_st = p_st.add_run(_get_status_icon(st, lang=lang))
         r_st.font.bold = True
         r_st.font.size = Pt(7.5)
         if st == "PASS":
@@ -1589,7 +2251,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
         ]
 
     p_sec3 = doc.add_paragraph()
-    r_sec3 = p_sec3.add_run("ITEMS REQUIRING ATTENTION")
+    r_sec3 = p_sec3.add_run(t["sec_attention"])
     r_sec3.font.bold = True
     r_sec3.font.size = Pt(10)
     p_sec3.paragraph_format.space_after = Pt(2)
@@ -1598,7 +2260,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     att_table_p1.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_margins(att_table_p1, 50, 50, 60, 60)
 
-    att_headers = ["Rule & Requirement", "Status", "Evidence", "Recommended Action"]
+    att_headers = [t["col_rule_req"], t["col_status"], t["col_evidence"], t["col_action"]]
     for j, h in enumerate(att_headers):
         cell = att_table_p1.rows[0].cells[j]
         _set_cell_background(cell, "b91c1c")
@@ -1612,7 +2274,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     row1 = att_table_p1.rows[1]
     row1.cells[0].paragraphs[0].add_run(f"{first_r.get('rule_number', '3')}\n{_clean_text(first_r.get('rule_name', ''))}").bold = True
     row1.cells[0].paragraphs[0].runs[0].font.size = Pt(7.5)
-    p_st = row1.cells[1].paragraphs[0].add_run(_get_status_icon(first_r.get("status", "REVIEW")))
+    p_st = row1.cells[1].paragraphs[0].add_run(_get_status_icon(first_r.get("status", "REVIEW"), lang=lang))
     p_st.font.bold = True
     p_st.font.size = Pt(7.5)
     p_st.font.color.rgb = RGBColor(217, 119, 6)
@@ -1637,7 +2299,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
             st = str(r.get("status", "REVIEW")).upper()
             row.cells[0].paragraphs[0].add_run(f"{rnum}\n{rname}").bold = True
             row.cells[0].paragraphs[0].runs[0].font.size = Pt(7.5)
-            p_st = row.cells[1].paragraphs[0].add_run(_get_status_icon(st))
+            p_st = row.cells[1].paragraphs[0].add_run(_get_status_icon(st, lang=lang))
             p_st.font.bold = True
             p_st.font.size = Pt(7.5)
             p_st.font.color.rgb = RGBColor(220, 38, 38) if st == "FAIL" else RGBColor(217, 119, 6)
@@ -1648,7 +2310,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     # Visual Inspection Summary
     p_sec4 = doc.add_paragraph()
-    r_sec4 = p_sec4.add_run("VISUAL INSPECTION SUMMARY")
+    r_sec4 = p_sec4.add_run(t["sec_visual"])
     r_sec4.font.bold = True
     r_sec4.font.size = Pt(10)
     p_sec4.paragraph_format.space_after = Pt(2)
@@ -1676,11 +2338,11 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     rd_status = r_rd.get("status", "REVIEW") if r_rd else "REVIEW"
 
     vis_fields = [
-        ("OCR Mean Confidence", ocr_conf_str, "Median Text Height", f"{med_height} px"),
-        ("Detected Text Blocks", str(blocks_count), "Min / Max Height", f"{min_height} / {max_height} px"),
-        ("Bounding Boxes Mapped", str(bbox_count), "Local Image Contrast", contrast_str),
-        ("Text Size (Rule 7)", _get_status_icon(ts_status), "Placement (Rule 8)", _get_status_icon(pl_status)),
-        ("Readability (Rule 9)", _get_status_icon(rd_status), "", ""),
+        (t["ocr_confidence"], ocr_conf_str, t["median_height"], f"{med_height} px"),
+        (t["text_blocks"], str(blocks_count), t["min_max_height"], f"{min_height} / {max_height} px"),
+        (t["mapped_bboxes"], str(bbox_count), t["local_contrast"], contrast_str),
+        (f"{t['text_size_rule']}:", _get_status_icon(ts_status, lang=lang), f"{t['placement_rule']}:", _get_status_icon(pl_status, lang=lang)),
+        (f"{t['readability_rule']}:", _get_status_icon(rd_status, lang=lang), "", ""),
     ]
 
     v_table = doc.add_table(rows=len(vis_fields), cols=4)
@@ -1702,7 +2364,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     # Rule Compliance Summary (First Slice: 0 to 6)
     p_sec5 = doc.add_paragraph()
-    r_sec5 = p_sec5.add_run("RULE COMPLIANCE SUMMARY (ALL RULES)")
+    r_sec5 = p_sec5.add_run(t["sec_compliance_summary"])
     r_sec5.font.bold = True
     r_sec5.font.size = Pt(10)
     p_sec5.paragraph_format.space_after = Pt(2)
@@ -1712,7 +2374,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     p2_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_margins(p2_table, 50, 50, 60, 60)
 
-    all_headers = ["Rule", "Requirement", "Status", "Evidence / Summary", "Recommendation"]
+    all_headers = [t["col_rule"], t["col_requirement"], t["col_status"], t["col_findings"], t["col_recommendation"]]
     for j, h in enumerate(all_headers):
         cell = p2_table.rows[0].cells[j]
         _set_cell_background(cell, "1e293b")
@@ -1730,7 +2392,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
         row.cells[0].paragraphs[0].add_run(rnum).bold = True
         row.cells[0].paragraphs[0].runs[0].font.size = Pt(7.5)
         row.cells[1].paragraphs[0].add_run(req).font.size = Pt(7.5)
-        p_st = row.cells[2].paragraphs[0].add_run(_get_status_icon(st))
+        p_st = row.cells[2].paragraphs[0].add_run(_get_status_icon(st, lang=lang))
         p_st.font.bold = True
         p_st.font.size = Pt(7.5)
         if st == "PASS":
@@ -1763,7 +2425,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
             row.cells[0].paragraphs[0].add_run(rnum).bold = True
             row.cells[0].paragraphs[0].runs[0].font.size = Pt(7.5)
             row.cells[1].paragraphs[0].add_run(req).font.size = Pt(7.5)
-            p_st = row.cells[2].paragraphs[0].add_run(_get_status_icon(st))
+            p_st = row.cells[2].paragraphs[0].add_run(_get_status_icon(st, lang=lang))
             p_st.font.bold = True
             p_st.font.size = Pt(7.5)
             if st == "PASS":
@@ -1796,7 +2458,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
             row.cells[0].paragraphs[0].add_run(rnum).bold = True
             row.cells[0].paragraphs[0].runs[0].font.size = Pt(7.5)
             row.cells[1].paragraphs[0].add_run(req).font.size = Pt(7.5)
-            p_st = row.cells[2].paragraphs[0].add_run(_get_status_icon(st))
+            p_st = row.cells[2].paragraphs[0].add_run(_get_status_icon(st, lang=lang))
             p_st.font.bold = True
             p_st.font.size = Pt(7.5)
             if st == "PASS":
@@ -1814,7 +2476,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     # Key OCR & Visual Evidence
     p_sec6 = doc.add_paragraph()
-    r_sec6 = p_sec6.add_run("KEY OCR & VISUAL EVIDENCE")
+    r_sec6 = p_sec6.add_run(t["sec_ocr_evidence"])
     r_sec6.font.bold = True
     r_sec6.font.size = Pt(10)
     p_sec6.paragraph_format.space_after = Pt(2)
@@ -1827,7 +2489,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     ev_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_margins(ev_table, 50, 50, 60, 60)
 
-    ev_headers = ["Target Declaration", "Extracted Text", "Confidence", "Bounding Box (X1, Y1, X2, Y2)"]
+    ev_headers = [t["col_target_rule"], t["col_extracted_text"], t["col_confidence"], t["col_bbox"]]
     for j, h in enumerate(ev_headers):
         cell = ev_table.rows[0].cells[j]
         _set_cell_background(cell, "1e3a8a")
@@ -1863,7 +2525,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
                 conf_str = "Detected"
             bbox_str = str(bbox_val)
         else:
-            text_str = "Not Detected"
+            text_str = t.get("not_detected", "Not Detected")
             conf_str = "N/A"
             bbox_str = "-"
 
@@ -1878,7 +2540,7 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     # Recommended Actions
     p_sec7 = doc.add_paragraph()
-    r_sec7 = p_sec7.add_run("RECOMMENDED ACTIONS FOR INSPECTOR")
+    r_sec7 = p_sec7.add_run(t["sec_recs"])
     r_sec7.font.bold = True
     r_sec7.font.size = Pt(10)
     p_sec7.paragraph_format.space_after = Pt(2)
@@ -1891,14 +2553,14 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
 
     # Inspector Remarks & Final Determination
     p_sec8 = doc.add_paragraph()
-    r_sec8 = p_sec8.add_run("INSPECTOR REMARKS & FINAL DETERMINATION")
+    r_sec8 = p_sec8.add_run(t["sec_signoff"])
     r_sec8.font.bold = True
     r_sec8.font.size = Pt(10)
     p_sec8.paragraph_format.space_after = Pt(2)
 
     p_rem = doc.add_paragraph()
     p_rem.add_run(
-        "Inspector Remarks:\n"
+        f"{t['remarks_label']}\n"
         "____________________________________________________________________________________________\n"
         "____________________________________________________________________________________________\n"
         "____________________________________________________________________________________________"
@@ -1911,14 +2573,14 @@ def generate_compliance_docx(payload: Dict[str, Any]) -> bytes:
     _set_cell_background(sign_table.rows[0].cells[0], "f1f5f9")
     _set_cell_background(sign_table.rows[0].cells[1], "f1f5f9")
 
-    sign_table.rows[0].cells[0].paragraphs[0].add_run("Final Inspection Decision:").bold = True
+    sign_table.rows[0].cells[0].paragraphs[0].add_run(f"{t['final_decision']}").bold = True
     sign_table.rows[0].cells[1].paragraphs[0].add_run("[ ] PASS      [ ] FAIL      [ ] REVIEW").bold = True
 
-    sign_table.rows[1].cells[0].paragraphs[0].add_run("Inspector Name: ___________________________").font.size = Pt(8)
-    sign_table.rows[1].cells[1].paragraphs[0].add_run("Designation: ___________________________").font.size = Pt(8)
+    sign_table.rows[1].cells[0].paragraphs[0].add_run(f"{t['inspector_name']} ___________________________").font.size = Pt(8)
+    sign_table.rows[1].cells[1].paragraphs[0].add_run(f"{t['designation']} ___________________________").font.size = Pt(8)
 
-    sign_table.rows[2].cells[0].paragraphs[0].add_run("Inspection Date: ___________________________").font.size = Pt(8)
-    sign_table.rows[2].cells[1].paragraphs[0].add_run("Signature: ___________________________").font.size = Pt(8)
+    sign_table.rows[2].cells[0].paragraphs[0].add_run(f"{t['inspection_date']} ___________________________").font.size = Pt(8)
+    sign_table.rows[2].cells[1].paragraphs[0].add_run(f"{t['signature']} ___________________________").font.size = Pt(8)
 
     buffer = io.BytesIO()
     doc.save(buffer)

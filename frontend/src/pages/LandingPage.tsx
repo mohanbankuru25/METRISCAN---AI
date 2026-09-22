@@ -180,9 +180,10 @@ export function LandingPage() {
           <div style={{
             position: "relative",
             width: "100%",
-            minHeight: "290px",
+            minHeight: isFlipped ? "295px" : "380px",
+            height: isFlipped ? "295px" : "380px",
             transformStyle: "preserve-3d",
-            transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+            transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), min-height 0.4s ease, height 0.4s ease",
             transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
           }}>
             {/* --------------------------------------------------------------

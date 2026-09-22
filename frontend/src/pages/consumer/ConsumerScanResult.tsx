@@ -40,6 +40,15 @@ interface HealthCaution {
 function getHealthCautions(scan: ConsumerScanItem): HealthCaution[] {
   const cautions: HealthCaution[] = [];
 
+  const allText = [
+    scan.product_name,
+    scan.brand,
+    scan.category,
+    ...(scan.ingredients?.map((i) => i.name) || []),
+    ...(scan.warnings || []),
+    ...(scan.recommendations?.map((r) => `${r.category} ${r.text}`) || []),
+  ].join(" ");
+
   // 1. Expiry Caution
   if (scan.is_expired || scan.expiry_status === "EXPIRED") {
     cautions.push({
@@ -52,32 +61,105 @@ function getHealthCautions(scan: ConsumerScanItem): HealthCaution[] {
     });
   }
 
-  // 2. High Sugar Caution
-  const sugarVal = scan.nutrition_data?.sugars || scan.nutrition_data?.added_sugars;
-  const sugarWarning = scan.warnings?.find((w) => /sugar/i.test(w));
-  let isHighSugar = false;
-  if (sugarVal) {
-    const num = parseFloat(sugarVal.replace(/[^0-9.]/g, ""));
-    if (!isNaN(num) && num >= 10.0) {
-      isHighSugar = true;
+  // 2. Betel Nut / Areca Nut (Supari) / Pan Masala / Habit-Forming Caution
+  const isBetelNut = /\b(?:betel\s*nut|areca(?:\s*nut)?|supari|paan\s*masala|pan\s*masala|gutkha|kattha|chuna|quwam)\b/i.test(
+    allText
+  );
+  if (isBetelNut) {
+    cautions.push({
+      id: "betel_nut",
+      type: "general",
+      title: "BETEL NUT / ARECA NUT (SUPARI)",
+      value: "Habit-Forming & Health Hazard",
+      description:
+        "Contains Betel Nut (Areca catechu). Chewing betel nut is habit-forming, injurious to oral health, and linked to oral submucous fibrosis (OSF) and neoplastic tissue changes. Health authorities caution against consumption.",
+      severity: "critical",
+    });
+  }
+
+  // 3. Artificial Sweeteners & Sugar Substitutes
+  const detectedSweeteners: string[] = [];
+  const sweetenerRegex = /\b(saccharin|admixture\s+of\s+saccharin|aspartame|sucralose|acesulfame(?:-k|\s*potassium)?|neotame|alitame|cyclamate|sorbitol|maltitol|isomalt|xylitol|erythritol|artificial\s*sweetener)\b/i;
+  scan.ingredients?.forEach((i) => {
+    const m = i.name.match(sweetenerRegex);
+    if (m) {
+      const clean = m[1].replace(/admixture\s+of\s+/i, "").toUpperCase();
+      if (!detectedSweeteners.includes(clean)) detectedSweeteners.push(clean);
+    }
+  });
+  if (detectedSweeteners.length === 0) {
+    const m = allText.match(sweetenerRegex);
+    if (m) {
+      const clean = m[1].replace(/admixture\s+of\s+/i, "").toUpperCase();
+      detectedSweeteners.push(clean);
     }
   }
-  if (isHighSugar || sugarWarning) {
+  if (detectedSweeteners.length > 0) {
     cautions.push({
-      id: "sugar",
-      type: "sugar",
-      title: "HIGH SUGAR CONTENT",
-      value: sugarVal ? `${sugarVal} declared` : undefined,
-      description:
-        sugarWarning ||
-        (sugarVal
-          ? `Declared sugars of ${sugarVal} per 100g/serving. Monitor intake if managing diabetes, obesity, or caloric restriction.`
-          : "High sugar content identified from package label."),
+      id: "sweetener",
+      type: "additives",
+      title: "ARTIFICIAL SWEETENER DECLARED",
+      value: detectedSweeteners.slice(0, 2).join(", "),
+      description: `Contains declared non-nutritive sweetener (${detectedSweeteners.join(
+        ", "
+      )}). Under FSSAI packaging & labelling regulations, products formulated with artificial sweeteners carry statutory declarations and are not recommended for children.`,
       severity: "warning",
     });
   }
 
-  // 3. Caffeine / Stimulants Caution
+  // 4. Concentrated Cooling Agents & Essential Oils
+  const detectedCooling: string[] = [];
+  const coolingRegex = /\b(menthol|borneol|camphor|clove\s*oil|eugenol|peppermint\s*oil|thymol)\b/i;
+  scan.ingredients?.forEach((i) => {
+    const m = i.name.match(coolingRegex);
+    if (m) {
+      const clean = m[1].toUpperCase();
+      if (!detectedCooling.includes(clean)) detectedCooling.push(clean);
+    }
+  });
+  if (detectedCooling.length === 0) {
+    const m = allText.match(coolingRegex);
+    if (m) detectedCooling.push(m[1].toUpperCase());
+  }
+  if (detectedCooling.length > 0) {
+    cautions.push({
+      id: "cooling_agents",
+      type: "general",
+      title: "COOLING AGENTS & ESSENTIAL OILS",
+      value: detectedCooling.join(", "),
+      description: `Contains concentrated cooling terpenes and volatile oils (${detectedCooling.join(
+        ", "
+      )}). May cause mucosal irritation or digestive sensitivity in young children or sensitive individuals.`,
+      severity: "advisory",
+    });
+  }
+
+  // 5. High Sugar Caution
+  const sugarVal = scan.nutrition_data?.sugars || scan.nutrition_data?.added_sugars;
+  const sugarWarning = scan.warnings?.find((w) => /sugar/i.test(w));
+  let sugarNum: number | null = null;
+  if (sugarVal) {
+    const parsed = parseFloat(sugarVal.replace(/[^0-9.]/g, ""));
+    if (!isNaN(parsed)) sugarNum = parsed;
+  }
+  const isHighSugar = (sugarNum !== null && sugarNum >= 10.0) || Boolean(sugarWarning);
+  if (isHighSugar) {
+    const isVeryHigh = sugarNum !== null && sugarNum >= 22.0;
+    cautions.push({
+      id: "sugar",
+      type: "sugar",
+      title: isVeryHigh ? "HIGH SUGAR CONTENT" : "ELEVATED SUGAR CONTENT",
+      value: sugarVal ? `${sugarVal} declared` : undefined,
+      description:
+        sugarWarning ||
+        (sugarVal
+          ? `Declared sugars of ${sugarVal} per 100g/serving. Frequent consumption contributes to excess calorie intake. Monitor if managing diabetes or weight.`
+          : "Elevated sugar content identified from package label."),
+      severity: isVeryHigh ? "critical" : "warning",
+    });
+  }
+
+  // 6. Caffeine / Stimulants Caution
   const caffeineWarning = scan.warnings?.find((w) => /caffeine|taurine|energy/i.test(w));
   const caffeineRec = scan.recommendations?.find(
     (r) => /caffeine/i.test(r.category) || /caffeine/i.test(r.text)
@@ -94,36 +176,36 @@ function getHealthCautions(scan: ConsumerScanItem): HealthCaution[] {
       description:
         caffeineWarning ||
         caffeineRec?.text ||
-        "Caffeine or stimulating agents detected on product label. Not recommended for children, pregnant or nursing mothers, or individuals sensitive to caffeine.",
+        "Caffeine or stimulating agents detected on product label. Not recommended for children, pregnant or nursing individuals, or people sensitive to caffeine.",
       severity: "warning",
     });
   }
 
-  // 4. Additives, Artificial Colours & Preservatives Caution
+  // 7. Additives, Artificial Colours & Preservatives Caution
   const additiveItems: string[] = [];
   scan.ingredients?.forEach((i) => {
     if (
-      /\b(?:e\s*\d{3,4}[a-z]?|ins\s*\d{3,4}[a-z]?|caramel|preservative|colour|color|artificial\s*flavour|acidulant|emulsifier|stabilizer|thickener|acidity\s*regulator|aspartame|sucralose|acesulfame|msg|monosodium\s*glutamate)\b/i.test(
+      /\b(?:e\s*\d{3,4}[a-z]?|ins\s*\d{3,4}[a-z]?|caramel|preservative|colour|color|tartrazine|sunset\s*yellow|carmoisine|allura\s*red|brilliant\s*blue|fast\s*green|erythrosine|artificial\s*flavour|permitted\s*flavour|flavouring|acidulant|emulsifier|stabilizer|thickener|acidity\s*regulator|msg|monosodium\s*glutamate|benzoate|sorbate|sulphite|sulfite|bha|bht)\b/i.test(
         i.name
       )
     ) {
-      additiveItems.push(i.name);
+      if (!additiveItems.includes(i.name)) additiveItems.push(i.name);
     }
   });
   if (additiveItems.length > 0) {
     cautions.push({
       id: "additives",
       type: "additives",
-      title: "ADDITIVES & PRESERVATIVES",
+      title: "ADDITIVES, FLAVOURS & PRESERVATIVES",
       value: `${additiveItems.length} identified`,
-      description: `Declared on label: ${additiveItems.slice(0, 4).join(", ")}${
-        additiveItems.length > 4 ? ` (+${additiveItems.length - 4} more)` : ""
-      }. Review if sensitive to food additives or artificial colours.`,
+      description: `Declared on label: ${additiveItems.slice(0, 3).join(", ")}${
+        additiveItems.length > 3 ? ` (+${additiveItems.length - 3} more)` : ""
+      }. Review if sensitive to synthetic food additives, colourings, or preservatives.`,
       severity: "advisory",
     });
   }
 
-  // 5. Sodium / Salt Caution
+  // 8. Sodium / Salt Caution
   const sodiumVal = scan.nutrition_data?.sodium;
   if (sodiumVal) {
     const num = parseFloat(sodiumVal.replace(/[^0-9.]/g, ""));
@@ -133,15 +215,15 @@ function getHealthCautions(scan: ConsumerScanItem): HealthCaution[] {
       cautions.push({
         id: "sodium",
         type: "sodium",
-        title: "HIGH SODIUM CONTENT",
+        title: inMg >= 800 ? "HIGH SODIUM CONTENT" : "ELEVATED SODIUM CONTENT",
         value: `${sodiumVal} declared`,
-        description: `High sodium level of ${sodiumVal} declared. Consumers on low-sodium diets or managing hypertension should monitor intake.`,
-        severity: "warning",
+        description: `Declared sodium level of ${sodiumVal}. Individuals adhering to low-sodium diets or managing blood pressure should monitor serving size.`,
+        severity: inMg >= 800 ? "critical" : "warning",
       });
     }
   }
 
-  // 6. Trans Fat / Saturated Fat Caution
+  // 9. Trans Fat / Saturated Fat Caution
   const transFat = scan.nutrition_data?.trans_fat;
   const satFat = scan.nutrition_data?.saturated_fat;
   if (transFat && parseFloat(transFat.replace(/[^0-9.]/g, "")) > 0.2) {
@@ -150,8 +232,8 @@ function getHealthCautions(scan: ConsumerScanItem): HealthCaution[] {
       type: "fat",
       title: "TRANS FAT DECLARED",
       value: `${transFat} per 100g/serving`,
-      description: `Contains declared trans fat (${transFat}). Health authorities recommend minimizing trans fat intake.`,
-      severity: "warning",
+      description: `Contains declared trans fat (${transFat}). Health authorities recommend minimizing trans fat intake as part of heart-healthy nutrition.`,
+      severity: "critical",
     });
   } else if (satFat && parseFloat(satFat.replace(/[^0-9.]/g, "")) >= 6.0) {
     cautions.push({
@@ -164,7 +246,7 @@ function getHealthCautions(scan: ConsumerScanItem): HealthCaution[] {
     });
   }
 
-  // 7. Allergen Caution
+  // 10. Allergen Caution
   if (scan.allergens && scan.allergens.length > 0) {
     cautions.push({
       id: "allergens",
@@ -178,9 +260,29 @@ function getHealthCautions(scan: ConsumerScanItem): HealthCaution[] {
     });
   }
 
-  // 8. Any other warnings from scan.warnings not already mapped
+  // 11. Missing / Undeclared Nutrition Facts Caution
+  const hasDeclaredNutrition = Boolean(
+    scan.nutrition_data &&
+      Object.keys(scan.nutrition_data).length > 0 &&
+      Object.values(scan.nutrition_data).some(
+        (v) => v && !/^(?:null|none|not\s*detected|-)$/i.test(String(v).trim())
+      )
+  );
+  if (!hasDeclaredNutrition) {
+    cautions.push({
+      id: "no_nutrition_facts",
+      type: "general",
+      title: "NUTRITION FACTS NOT DECLARED",
+      value: "Undeclared on Label",
+      description:
+        "No nutritional table (energy, sugars, fats, sodium) was detected on this packaging label. Consumers with medical dietary restrictions (diabetic, hypertensive, low-calorie) should consume with awareness.",
+      severity: "advisory",
+    });
+  }
+
+  // 12. Any other warnings from scan.warnings not already mapped
   scan.warnings?.forEach((w, idx) => {
-    if (!/sugar|caffeine|expired|infant|child/i.test(w)) {
+    if (!/sugar|caffeine|expired|infant|child|betel|supari|sweetener|sodium/i.test(w)) {
       cautions.push({
         id: `extra_warn_${idx}`,
         type: "general",
@@ -209,6 +311,15 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
 } {
   const items: ConsumerAgeWarningItem[] = [];
 
+  const allText = [
+    scan.product_name,
+    scan.brand,
+    scan.category,
+    ...(scan.ingredients?.map((i) => i.name) || []),
+    ...(scan.warnings || []),
+    ...(scan.recommendations?.map((r) => `${r.category} ${r.text}`) || []),
+  ].join(" ");
+
   // --- 1. Check Product Expiration ---
   const isExpired = scan.is_expired || scan.expiry_status === "EXPIRED";
   if (isExpired) {
@@ -218,11 +329,89 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
       title: "PRODUCT EXPIRED — DO NOT CONSUME",
       badge: scan.expiry_date || scan.best_before || "Expired",
       description:
-        "This product has passed its declared shelf-life date. Consumption is not recommended for any age group. Please check packaging and consider contacting the retailer or authority.",
+        "This product has passed its declared shelf-life date. Consumption is not recommended for any age group. Please check packaging and discard safely.",
     });
   }
 
-  // --- 2. Check Explicit Package Warnings ---
+  // --- 2. Betel Nut / Areca Nut (Supari) / Habit-Forming Guidance ---
+  const isBetelNut = /\b(?:betel\s*nut|areca(?:\s*nut)?|supari|paan\s*masala|pan\s*masala|gutkha|kattha|chuna|quwam)\b/i.test(
+    allText
+  );
+  if (isBetelNut) {
+    items.push({
+      id: "betel_age_restriction",
+      severity: "critical",
+      title: "RESTRICTED FOR CHILDREN & MINORS",
+      badge: "Strictly Not For Children",
+      description:
+        "Betel nut (Areca catechu) formulations are strictly not recommended for children, adolescents, or pregnant individuals. Arecoline alkaloids pose severe risks to developing oral mucosa and are habit-forming.",
+    });
+    items.push({
+      id: "betel_habit_warning",
+      severity: "warning",
+      title: "ORAL HEALTH HAZARD WARNING",
+      badge: "Statutory Caution",
+      description:
+        "Chewing of supari/areca nut is injurious to oral mucosa and dental enamel. Frequent consumption leads to oral submucous fibrosis (OSF) and habit-forming dependency.",
+    });
+  }
+
+  // --- 3. Artificial Sweeteners Guidance ---
+  const detectedSweeteners: string[] = [];
+  const sweetenerRegex = /\b(saccharin|admixture\s+of\s+saccharin|aspartame|sucralose|acesulfame(?:-k|\s*potassium)?|neotame|alitame|cyclamate)\b/i;
+  scan.ingredients?.forEach((i) => {
+    const m = i.name.match(sweetenerRegex);
+    if (m) {
+      const clean = m[1].replace(/admixture\s+of\s+/i, "").toUpperCase();
+      if (!detectedSweeteners.includes(clean)) detectedSweeteners.push(clean);
+    }
+  });
+  if (detectedSweeteners.length === 0) {
+    const m = allText.match(sweetenerRegex);
+    if (m) {
+      const clean = m[1].replace(/admixture\s+of\s+/i, "").toUpperCase();
+      detectedSweeteners.push(clean);
+    }
+  }
+  if (detectedSweeteners.length > 0) {
+    items.push({
+      id: "sweetener_child_caution",
+      severity: "critical",
+      title: "NOT RECOMMENDED FOR CHILDREN",
+      badge: "FSSAI Sweetener Advisory",
+      description: `Contains artificial sweetener (${detectedSweeteners.join(
+        ", "
+      )}). Food safety regulations stipulate that products containing artificial sweeteners are not recommended for infants and young children.`,
+    });
+  }
+
+  // --- 4. Cooling Terpenes & Concentrated Essential Oils Guidance ---
+  const detectedCooling: string[] = [];
+  const coolingRegex = /\b(menthol|borneol|camphor|clove\s*oil|eugenol|peppermint\s*oil)\b/i;
+  scan.ingredients?.forEach((i) => {
+    const m = i.name.match(coolingRegex);
+    if (m) {
+      const clean = m[1].toUpperCase();
+      if (!detectedCooling.includes(clean)) detectedCooling.push(clean);
+    }
+  });
+  if (detectedCooling.length === 0) {
+    const m = allText.match(coolingRegex);
+    if (m) detectedCooling.push(m[1].toUpperCase());
+  }
+  if (detectedCooling.length > 0) {
+    items.push({
+      id: "cooling_digestive_guidance",
+      severity: "warning",
+      title: "DIGESTIVE & SENSITIVITY ADVISORY",
+      badge: "Essential Oils",
+      description: `Contains concentrated cooling agents (${detectedCooling.join(
+        ", "
+      )}). Not suitable for infants or young children; individuals prone to gastritis, heartburn, or mucosal sensitivity should consume with discretion.`,
+    });
+  }
+
+  // --- 5. Explicit Package Age Warnings ---
   const explicitWarning = scan.warnings?.find((w) =>
     /not suitable for (?:infants|children|babies)|under (?:16|18|12) years|not recommended for children|pregnancy|pregnant/i.test(
       w
@@ -231,7 +420,7 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
   const explicitRec = scan.recommendations?.find((r) =>
     /age|child|infant|baby|suitability|pregnancy/i.test(r.category)
   );
-  if (explicitWarning) {
+  if (explicitWarning && !items.some((i) => i.id === "betel_age_restriction" || i.id === "sweetener_child_caution")) {
     items.push({
       id: "explicit_pkg_warning",
       severity: "critical",
@@ -239,7 +428,7 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
       badge: "Declared on Package",
       description: explicitWarning,
     });
-  } else if (explicitRec && /not suitable|under \d+/i.test(explicitRec.text)) {
+  } else if (explicitRec && /not suitable|under \d+/i.test(explicitRec.text) && !items.some((i) => i.id === "betel_age_restriction")) {
     items.push({
       id: "explicit_rec_warning",
       severity: "critical",
@@ -249,7 +438,7 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
     });
   }
 
-  // --- 3. Evaluate Caffeine / Stimulants ---
+  // --- 6. Caffeine & Stimulants ---
   const hasCaffeineInIngredients = scan.ingredients?.some((i) =>
     /\b(?:caffeine|coffee\s*extract|taurine|guarana|kola\s*nut)\b/i.test(i.name)
   );
@@ -261,7 +450,7 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
   );
   const hasCaffeine = Boolean(hasCaffeineInIngredients || caffeineInWarnings || caffeineInRecs);
 
-  // --- 4. Evaluate Sugar Content ---
+  // --- 7. Sugar Content ---
   const sugarVal = scan.nutrition_data?.sugars || scan.nutrition_data?.added_sugars;
   let sugarNum: number | null = null;
   if (sugarVal) {
@@ -271,7 +460,6 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
   const sugarInWarnings = scan.warnings?.some((w) => /high\s*sugar/i.test(w));
   const isHighSugar = (sugarNum !== null && sugarNum >= 10.0) || Boolean(sugarInWarnings);
 
-  // --- 5. Child Caution (Combined Factors) ---
   if (hasCaffeine && isHighSugar) {
     items.push({
       id: "child_caution_caffeine_sugar",
@@ -279,16 +467,16 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
       title: "CAUTION FOR CHILDREN",
       badge: "High Sugar & Caffeine",
       description:
-        "This product contains caffeine and a significant amount of added sugar. Children may want to avoid or limit consumption.",
+        "This product contains caffeine and elevated added sugars. Children may want to avoid or limit consumption.",
     });
   } else if (hasCaffeine) {
     items.push({
-      id: "child_caution_caffeine",
+      id: "caffeine_guidance",
       severity: "warning",
-      title: "CAUTION FOR CHILDREN",
-      badge: "Caffeine Content",
+      title: "CAFFEINE & STIMULANT ADVISORY",
+      badge: "Stimulant Advisory",
       description:
-        "Caffeine is present in the product. Children and adolescents may want to avoid or limit consumption.",
+        "Caffeine is present. Children, pregnant individuals, and people sensitive to stimulants should limit intake or consult a healthcare professional.",
     });
   } else if (isHighSugar && sugarNum !== null && sugarNum >= 15.0) {
     items.push({
@@ -297,31 +485,18 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
       title: "MODERATION FOR CHILDREN",
       badge: `${sugarVal} declared`,
       description:
-        "Contains a high amount of declared sugars. Frequent consumption by young children should be limited as part of balanced nutrition.",
+        "Contains elevated declared sugars. Frequent consumption by young children should be moderated to protect dental health and maintain balanced nutrition.",
     });
   }
 
-  // --- 6. High Sugar Guidance ---
   if (isHighSugar) {
     items.push({
       id: "high_sugar_guidance",
-      severity: "critical",
-      title: "HIGH SUGAR",
+      severity: "warning",
+      title: "SUGAR & GLUCOSE MANAGEMENT",
       badge: sugarVal ? `${sugarVal} declared` : "Elevated Sugar",
       description:
-        "The declared nutrition information indicates a high sugar content. Frequent consumption can contribute to excessive sugar intake. People trying to reduce sugar intake or managing blood glucose may want to limit consumption.",
-    });
-  }
-
-  // --- 7. Caffeine Guidance ---
-  if (hasCaffeine) {
-    items.push({
-      id: "caffeine_guidance",
-      severity: "warning",
-      title: "CAFFEINE",
-      badge: "Stimulant Advisory",
-      description:
-        "Caffeine is present in the product. People sensitive to caffeine, children, pregnant individuals, or people advised to limit caffeine should exercise appropriate caution and follow advice from their healthcare professional.",
+        "Declared nutrition information indicates elevated sugar content. People managing blood glucose or monitoring caloric intake may want to moderate serving sizes.",
     });
   }
 
@@ -338,18 +513,11 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
   if (isHighSodium) {
     items.push({
       id: "high_sodium_guidance",
-      severity: "critical",
-      title: "HIGH SODIUM",
+      severity: sodiumNum && sodiumNum >= 800 ? "critical" : "warning",
+      title: "SODIUM & HYPERTENSION GUIDANCE",
       badge: sodiumVal ? `${sodiumVal} declared` : "Elevated Sodium",
       description:
-        "The declared sodium content is relatively high. People who need to limit sodium intake should consider limiting consumption and follow advice from their healthcare professional.",
-    });
-    items.push({
-      id: "sodium_who_take_care",
-      severity: "warning",
-      title: "WHO SHOULD TAKE CARE?",
-      description:
-        "Individuals monitoring blood pressure, heart health, or adhering to low-sodium dietary advice should check serving sizes carefully.",
+        "Declared sodium level is relatively high. Individuals managing hypertension, cardiac wellness, or salt restriction should check serving portions carefully.",
     });
   }
 
@@ -360,10 +528,10 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
     items.push({
       id: "trans_fat_guidance",
       severity: "critical",
-      title: "TRANS FAT DECLARED",
+      title: "TRANS FAT MINIMIZATION",
       badge: `${transFatVal} declared`,
       description:
-        "Contains declared trans fat. Health authorities recommend minimizing trans fat intake as part of heart-healthy nutrition.",
+        "Contains declared trans fat. Health authorities recommend minimizing trans fat consumption as part of cardiovascular nutrition.",
     });
   }
 
@@ -372,53 +540,91 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
     items.push({
       id: "allergen_guidance",
       severity: "critical",
-      title: "ALLERGEN CAUTION",
+      title: "ALLERGEN SENSITIVITY CAUTION",
       badge: scan.allergens.join(", "),
       description: `Contains declared allergens: ${scan.allergens.join(
         ", "
-      )}. People with an allergy to these ingredients should avoid the product unless they have confirmed it is suitable for them.`,
+      )}. Individuals with specific food allergies must verify safety before consumption.`,
     });
   }
 
   // --- 11. Additives / Preservatives Notice ---
   const additiveCount =
     scan.ingredients?.filter((i) =>
-      /\b(?:e\s*\d{3,4}[a-z]?|ins\s*\d{3,4}[a-z]?|caramel|preservative|colour|color|artificial|acidulant|aspartame|sucralose|msg)\b/i.test(
+      /\b(?:e\s*\d{3,4}[a-z]?|ins\s*\d{3,4}[a-z]?|caramel|preservative|colour|color|artificial|acidulant|aspartame|sucralose|msg|benzoate|sorbate|sulphite|flavour)\b/i.test(
         i.name
       )
     ).length || 0;
-  if (additiveCount > 2) {
+  if (additiveCount > 1 && !isBetelNut) {
     items.push({
       id: "additives_guidance",
-      severity: "warning",
-      title: "FOOD ADDITIVES IDENTIFIED",
+      severity: "advisory",
+      title: "FOOD ADDITIVES & PRESERVATIVES",
       badge: `${additiveCount} identified`,
       description:
-        "Multiple declared additives or artificial colours identified in ingredients. Sensitive consumers or those limiting ultra-processed formulations may wish to review.",
+        "Declared additives or preservatives identified in ingredients. Sensitive consumers or those limiting ultra-processed formulations may wish to review composition.",
     });
   }
 
-  // --- 12. General Guidance & Suitability Resolution ---
+  // --- 12. Nutrition Transparency (when undeclared) ---
+  const hasDeclaredNutrition = Boolean(
+    scan.nutrition_data &&
+      Object.keys(scan.nutrition_data).length > 0 &&
+      Object.values(scan.nutrition_data).some(
+        (v) => v && !/^(?:null|none|not\s*detected|-)$/i.test(String(v).trim())
+      )
+  );
+  if (!hasDeclaredNutrition) {
+    items.push({
+      id: "nutrition_unspecified",
+      severity: "advisory",
+      title: "NUTRITIONAL TRANSPARENCY NOTICE",
+      badge: "Undeclared Nutrition",
+      description:
+        "Nutritional values per serving are not declared on this label. Portion size and dietary allowances (RDA) cannot be calculated directly from package contents.",
+    });
+  }
+
+  // --- 13. Resolution & Overall Guidance ---
   const hasCritical = items.some((i) => i.severity === "critical");
   const hasWarning = items.some((i) => i.severity === "warning");
 
   if (hasCritical || hasWarning) {
-    items.push({
-      id: "general_adult_guidance",
-      severity: "suitable",
-      title: "GENERAL CONSUMER GUIDANCE",
-      description:
-        "Adults may consume the product in moderation as part of a balanced diet, subject to their individual dietary needs and personal health advice.",
-    });
+    if (!isBetelNut) {
+      items.push({
+        id: "general_adult_guidance",
+        severity: "suitable",
+        title: "GENERAL ADULT MODERATION",
+        description:
+          "Adults without underlying sensitivities may consume in moderation as part of a balanced diet, subject to individual dietary needs.",
+      });
+    }
 
     return {
       overallLevel: hasCritical ? "danger" : "warning",
-      headerTitle: hasCritical ? "CONSUMER & AGE WARNINGS" : "CONSUMER & AGE ADVISORY",
+      headerTitle: hasCritical ? "🔴 CONSUMER & AGE WARNINGS" : "🟠 CONSUMER & AGE ADVISORY",
       items,
     };
   }
 
-  // --- Clean / Natural / Low-Risk Product (e.g. Dates, Oats, Rice, Pulses, Milk) ---
+  // If there is only advisory items (e.g., missing nutrition facts or mild additives):
+  const hasAdvisory = items.some((i) => i.severity === "advisory");
+  if (hasAdvisory) {
+    items.push({
+      id: "general_family_guidance",
+      severity: "suitable",
+      title: "GENERAL FAMILY GUIDANCE",
+      description:
+        "Generally suitable for consumption with awareness of undeclared nutritional specifics or declared additives.",
+    });
+    return {
+      overallLevel: "warning",
+      headerTitle: "🟠 CONSUMER & AGE ADVISORY",
+      items,
+    };
+  }
+
+  // --- Truly Clean / Natural / Low-Risk Product (e.g. Dates, Oats, Rice, Pulses, Milk) ---
   items.push({
     id: "generally_suitable",
     severity: "suitable",
@@ -438,14 +644,96 @@ function getConsumerAndAgeGuidance(scan: ConsumerScanItem): {
     severity: "suitable",
     title: "INGREDIENT PROFILE",
     description:
-      "No caffeine or specific ingredient-based age caution was identified in the analyzed information.",
+      "No caffeine, habit-forming substances, or age-restricted additives were identified in the analyzed information.",
   });
 
   return {
     overallLevel: "suitable",
-    headerTitle: "CONSUMER & AGE GUIDANCE",
+    headerTitle: "🟢 CONSUMER & AGE GUIDANCE",
     items,
   };
+}
+
+function getTargetAudienceGuidance(scan: ConsumerScanItem): Array<{ category: string; text: string }> {
+  const list: Array<{ category: string; text: string }> = [];
+
+  const allText = [
+    scan.product_name,
+    scan.brand,
+    scan.category,
+    ...(scan.ingredients?.map((i) => i.name) || []),
+    ...(scan.warnings || []),
+  ].join(" ");
+
+  const isBetelNut = /\b(?:betel\s*nut|areca(?:\s*nut)?|supari|paan\s*masala|pan\s*masala|gutkha|kattha|chuna|quwam)\b/i.test(
+    allText
+  );
+  if (isBetelNut) {
+    list.push({
+      category: "Oral Health & Minors Protection",
+      text: "Individuals under 18 years, pregnant or nursing individuals, and anyone advised against oral mucosal irritants should strictly avoid this product.",
+    });
+  }
+
+  const sweetenerMatch = allText.match(
+    /\b(saccharin|admixture\s+of\s+saccharin|aspartame|sucralose|acesulfame(?:-k|\s*potassium)?|neotame)\b/i
+  );
+  if (sweetenerMatch) {
+    list.push({
+      category: "Children & Sweetener Sensitivity",
+      text: `Contains artificial sweetener (${sweetenerMatch[1].replace(/admixture\s+of\s+/i, "")}). FSSAI safety norms declare it not recommended for children.`,
+    });
+  }
+
+  const coolingMatch = allText.match(/\b(menthol|borneol|camphor|clove\s*oil|eugenol)\b/i);
+  if (coolingMatch) {
+    list.push({
+      category: "Digestive & Mucosal Sensitivity",
+      text: "Consumers prone to acid reflux, gastritis, or mucous membrane sensitivity should monitor intake of concentrated menthol and aromatic essential oils.",
+    });
+  }
+
+  if (scan.allergens && scan.allergens.length > 0) {
+    list.push({
+      category: "Allergen Sensitive Individuals",
+      text: `Check label for declared allergens: ${scan.allergens.join(", ")}. Avoid if sensitive.`,
+    });
+  }
+
+  const hasDeclaredNutrition = Boolean(
+    scan.nutrition_data &&
+      Object.keys(scan.nutrition_data).length > 0 &&
+      Object.values(scan.nutrition_data).some(
+        (v) => v && !/^(?:null|none|not\s*detected|-)$/i.test(String(v).trim())
+      )
+  );
+  if (!hasDeclaredNutrition) {
+    list.push({
+      category: "Dietary & Calorie Conscious",
+      text: "Nutritional values per serving are not declared on this label. Diabetics, hypertensive consumers, or those on measured calorie diets should exercise discretion.",
+    });
+  }
+
+  // Merge any backend recommendations that are distinct
+  if (scan.recommendations && scan.recommendations.length > 0) {
+    scan.recommendations.forEach((rec) => {
+      const alreadyHas = list.some(
+        (item) => item.category.toLowerCase().includes(rec.category.toLowerCase().slice(0, 5))
+      );
+      if (!alreadyHas) {
+        list.push(rec);
+      }
+    });
+  }
+
+  if (list.length === 0) {
+    list.push({
+      category: "Consumer Guidance",
+      text: "Verify package seal integrity and expiry date prior to purchase. Check serving size against recommended daily allowances.",
+    });
+  }
+
+  return list;
 }
 
 export default function ConsumerScanResult() {
@@ -494,6 +782,10 @@ export default function ConsumerScanResult() {
 
   const consumerGuidance = useMemo(() => {
     return scan ? getConsumerAndAgeGuidance(scan) : null;
+  }, [scan]);
+
+  const targetAudienceGuidance = useMemo(() => {
+    return scan ? getTargetAudienceGuidance(scan) : [];
   }, [scan]);
 
   const handleDownloadPdf = async () => {
@@ -1617,9 +1909,9 @@ export default function ConsumerScanResult() {
                   }}
                 >
                   {consumerGuidance?.overallLevel === "danger"
-                    ? "Important Cautions Active"
+                    ? (consumerGuidance.items.find((i) => i.severity === "critical" && i.badge)?.badge || "Important Cautions Active")
                     : consumerGuidance?.overallLevel === "warning"
-                    ? "Moderate Caution Advised"
+                    ? (consumerGuidance.items.find((i) => i.severity === "warning" && i.badge)?.badge || "Moderate Caution Advised")
                     : "No Specific Age Restriction"}
                 </span>
               </div>
@@ -1754,9 +2046,9 @@ export default function ConsumerScanResult() {
                 </h2>
               </div>
 
-              {scan.recommendations && scan.recommendations.length > 0 ? (
+              {targetAudienceGuidance && targetAudienceGuidance.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-                  {scan.recommendations.map((rec, idx) => (
+                  {targetAudienceGuidance.map((rec, idx) => (
                     <div
                       key={idx}
                       style={{

@@ -88,7 +88,7 @@ export function InspectorDashboard() {
 
           <div>
             <h1 style={{ fontSize: "1.75rem", color: "#ffffff", margin: "0 0 0.35rem 0", letterSpacing: "-0.02em" }}>
-              Inspector Dashboard
+              Legal Metrology Inspector Dashboard
             </h1>
             <p style={{ color: "#94a3b8", fontSize: "0.95rem", maxWidth: "800px", margin: 0, lineHeight: 1.5 }}>
               Monitor and perform packaged commodity inspections under the Legal Metrology (Packaged Commodities) Rules, 2011.

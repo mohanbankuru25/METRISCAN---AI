@@ -9,7 +9,7 @@ let inMemoryUser: UserProfile | null = null;
 
 export const authService = {
   getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) || localStorage.getItem("access_token");
   },
 
   setSession(accessToken: string, refreshToken?: string) {

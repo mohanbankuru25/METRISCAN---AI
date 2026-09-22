@@ -3,6 +3,19 @@ import type { ReportItem } from "../types/platform";
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+export function getPreferredLanguage(overrideLang?: string): string {
+  if (overrideLang) return overrideLang.toLowerCase();
+  try {
+    const saved = localStorage.getItem("metriscan_preferred_language");
+    if (saved && ["en", "hi", "mr", "te", "ta", "kn"].includes(saved.toLowerCase())) {
+      return saved.toLowerCase();
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return "en";
+}
+
 export async function getReportsList(search?: string): Promise<ReportItem[]> {
   const query = new URLSearchParams();
   if (search) query.set("search", search);
@@ -19,13 +32,14 @@ export async function getReportsList(search?: string): Promise<ReportItem[]> {
   return json.data || [];
 }
 
-export async function viewReportPdf(idOrInspectionId: string): Promise<void> {
-  let response = await fetch(`${BACKEND_URL}/api/reports/${idOrInspectionId}/pdf?inline=true`, {
+export async function viewReportPdf(idOrInspectionId: string, language?: string): Promise<void> {
+  const lang = getPreferredLanguage(language);
+  let response = await fetch(`${BACKEND_URL}/api/reports/${idOrInspectionId}/pdf?inline=true&lang=${lang}`, {
     headers: authService.getAuthHeaders(),
   });
 
   if (!response.ok && response.status === 404) {
-    response = await fetch(`${BACKEND_URL}/api/reports/inspection/${idOrInspectionId}/pdf?inline=true`, {
+    response = await fetch(`${BACKEND_URL}/api/reports/inspection/${idOrInspectionId}/pdf?inline=true&lang=${lang}`, {
       headers: authService.getAuthHeaders(),
     });
   }
@@ -53,10 +67,12 @@ export async function viewReportPdf(idOrInspectionId: string): Promise<void> {
 export async function downloadStoredReport(
   reportId: string,
   format: "pdf" | "docx" = "pdf",
-  customFilename?: string
+  customFilename?: string,
+  language?: string
 ): Promise<void> {
+  const lang = getPreferredLanguage(language);
   let response = await fetch(
-    `${BACKEND_URL}/api/reports/${reportId}/${format}`,
+    `${BACKEND_URL}/api/reports/${reportId}/${format}?lang=${lang}`,
     {
       headers: authService.getAuthHeaders(),
     }
@@ -64,7 +80,7 @@ export async function downloadStoredReport(
 
   if (!response.ok && response.status === 404) {
     response = await fetch(
-      `${BACKEND_URL}/api/reports/download/${reportId}?format=${format}`,
+      `${BACKEND_URL}/api/reports/download/${reportId}?format=${format}&lang=${lang}`,
       {
         headers: authService.getAuthHeaders(),
       }
@@ -90,7 +106,7 @@ export async function downloadStoredReport(
   a.href = url;
 
   const disposition = response.headers.get("Content-Disposition");
-  let filename = customFilename || `Legal_Metrology_Report_${reportId}.${format}`;
+  let filename = customFilename || `Legal_Metrology_Report_${reportId}_${lang}.${format}`;
   if (!customFilename && disposition && disposition.includes("filename=")) {
     const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
     if (matches && matches[1]) {
@@ -105,22 +121,27 @@ export async function downloadStoredReport(
   setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }
 
-export async function downloadReportPdf(payload: any, customFilename?: string): Promise<void> {
+export async function downloadReportPdf(payload: any, customFilename?: string, language?: string): Promise<void> {
+  const lang = getPreferredLanguage(language);
   // If payload has an inspection ID or is already in Supabase, retrieve stored report
   const scanId = payload?.id || payload?.inspection_id || payload?.inspection_number;
   if (scanId) {
     try {
-      await downloadStoredReport(scanId, "pdf", customFilename);
+      await downloadStoredReport(scanId, "pdf", customFilename, lang);
       return;
     } catch (e) {
       console.warn("Notice: Stored report download failed, falling back to ad-hoc generation:", e);
     }
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/reports/pdf`, {
+  const reqPayload = { ...payload, language: lang };
+  const response = await fetch(`${BACKEND_URL}/api/reports/pdf?lang=${lang}`, {
     method: "POST",
-    headers: authService.getAuthHeaders(),
-    body: JSON.stringify(payload),
+    headers: {
+      ...authService.getAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(reqPayload),
   });
 
   if (!response.ok) {
@@ -140,7 +161,7 @@ export async function downloadReportPdf(payload: any, customFilename?: string): 
   a.href = url;
 
   const disposition = response.headers.get("Content-Disposition");
-  let filename = customFilename || "Legal_Metrology_Compliance_Report.pdf";
+  let filename = customFilename || `Legal_Metrology_Compliance_Report_${lang}.pdf`;
   if (!customFilename && disposition && disposition.includes("filename=")) {
     const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
     if (matches && matches[1]) {
@@ -155,21 +176,26 @@ export async function downloadReportPdf(payload: any, customFilename?: string): 
   setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }
 
-export async function downloadReportDocx(payload: any, customFilename?: string): Promise<void> {
+export async function downloadReportDocx(payload: any, customFilename?: string, language?: string): Promise<void> {
+  const lang = getPreferredLanguage(language);
   const scanId = payload?.id || payload?.inspection_id || payload?.inspection_number;
   if (scanId) {
     try {
-      await downloadStoredReport(scanId, "docx", customFilename);
+      await downloadStoredReport(scanId, "docx", customFilename, lang);
       return;
     } catch (e) {
       console.warn("Notice: Stored report download failed, falling back to ad-hoc generation:", e);
     }
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/reports/docx`, {
+  const reqPayload = { ...payload, language: lang };
+  const response = await fetch(`${BACKEND_URL}/api/reports/docx?lang=${lang}`, {
     method: "POST",
-    headers: authService.getAuthHeaders(),
-    body: JSON.stringify(payload),
+    headers: {
+      ...authService.getAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(reqPayload),
   });
 
   if (!response.ok) {
@@ -189,7 +215,7 @@ export async function downloadReportDocx(payload: any, customFilename?: string):
   a.href = url;
 
   const disposition = response.headers.get("Content-Disposition");
-  let filename = customFilename || "Legal_Metrology_Compliance_Report.docx";
+  let filename = customFilename || `Legal_Metrology_Compliance_Report_${lang}.docx`;
   if (!customFilename && disposition && disposition.includes("filename=")) {
     const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
     if (matches && matches[1]) {
@@ -207,6 +233,7 @@ export async function downloadReportDocx(payload: any, customFilename?: string):
 export const reportService = {
   getReports: getReportsList,
   getReportsList,
+  getPreferredLanguage,
   viewReportPdf,
   downloadStoredReport,
   downloadReportPdf,

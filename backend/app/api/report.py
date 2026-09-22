@@ -61,7 +61,14 @@ def _resolve_inspection_payload(report: Dict[str, Any]) -> Dict[str, Any]:
 
     # Recover any product fields that were detected by compliance rules but omitted in products table
     def _recover_from_evidence(rule_codes: List[str]) -> Optional[str]:
+        items_to_check = []
         for cr in comp_results:
+            if isinstance(cr, dict):
+                items_to_check.append(cr)
+                if "declaration_evaluations" in cr and isinstance(cr["declaration_evaluations"], list):
+                    items_to_check.extend(cr["declaration_evaluations"])
+
+        for cr in items_to_check:
             if not isinstance(cr, dict):
                 continue
             rid = str(cr.get("rule_id", "")).upper()
@@ -189,19 +196,21 @@ def _resolve_inspection_payload(report: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _get_or_generate_report_bytes(report: Dict[str, Any], format_type: str = "pdf") -> Tuple[bytes, str, str]:
+def _get_or_generate_report_bytes(report: Dict[str, Any], format_type: str = "pdf", language: str = "en") -> Tuple[bytes, str, str]:
     fmt = format_type.lower()
+    lang = (language or "en").lower()
     insp_number = (report.get("inspections") or {}).get("inspection_number") or report.get("report_number") or "Inspection"
-    filename = f"{insp_number}_Compliance_Report.{fmt}"
+    filename = f"{insp_number}_Compliance_Report_{lang}.{fmt}" if lang != "en" else f"{insp_number}_Compliance_Report.{fmt}"
 
     # Always generate dynamically from the scoped inspection record to prevent serving stale cached artifacts
     payload = _resolve_inspection_payload(report)
+    payload["language"] = lang
 
     if fmt == "pdf":
         media_type = "application/pdf"
-        pdf_bytes = generate_compliance_pdf(payload)
+        pdf_bytes = generate_compliance_pdf(payload, language=lang)
         safe_insp = payload.get("inspection_number", "default")
-        dest_path = f"{safe_insp}/compliance_report.pdf"
+        dest_path = f"{safe_insp}/compliance_report_{lang}.pdf" if lang != "en" else f"{safe_insp}/compliance_report.pdf"
         try:
             SupabaseService.upload_file(
                 bucket_name="inspection-reports",
@@ -219,9 +228,9 @@ def _get_or_generate_report_bytes(report: Dict[str, Any], format_type: str = "pd
     else:
         # DOCX format
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        docx_bytes = generate_compliance_docx(payload)
+        docx_bytes = generate_compliance_docx(payload, language=lang)
         safe_insp = payload.get("inspection_number", "default")
-        dest_path = f"{safe_insp}/compliance_report.docx"
+        dest_path = f"{safe_insp}/compliance_report_{lang}.docx" if lang != "en" else f"{safe_insp}/compliance_report.docx"
         try:
             SupabaseService.upload_file(
                 bucket_name="inspection-reports",
@@ -326,6 +335,7 @@ def get_report_detail(
 def view_or_download_pdf(
     report_id: str,
     inline: bool = Query(default=True, description="True to view in browser tab, False to force file download"),
+    lang: str = Query(default="en", description="Preferred report language (en, mr, hi, te, ta, kn)"),
     authorization: Optional[str] = Header(None),
 ):
     report = SupabaseService.get_report(report_id)
@@ -352,7 +362,7 @@ def view_or_download_pdf(
         )
 
     try:
-        content, filename, media_type = _get_or_generate_report_bytes(report, "pdf")
+        content, filename, media_type = _get_or_generate_report_bytes(report, "pdf", language=lang)
         disposition = "inline" if inline else "attachment"
 
         return StreamingResponse(
@@ -378,6 +388,7 @@ def view_or_download_pdf(
 @router.get("/{report_id}/docx")
 def download_docx(
     report_id: str,
+    lang: str = Query(default="en", description="Preferred report language (en, mr, hi, te, ta, kn)"),
     authorization: Optional[str] = Header(None),
 ):
     report = SupabaseService.get_report(report_id)
@@ -404,7 +415,7 @@ def download_docx(
         )
 
     try:
-        content, filename, media_type = _get_or_generate_report_bytes(report, "docx")
+        content, filename, media_type = _get_or_generate_report_bytes(report, "docx", language=lang)
 
         return StreamingResponse(
             io.BytesIO(content),
@@ -438,17 +449,19 @@ def get_report_by_inspection(
 def view_inspection_pdf(
     inspection_id: str,
     inline: bool = Query(default=True),
+    lang: str = Query(default="en"),
     authorization: Optional[str] = Header(None),
 ):
-    return view_or_download_pdf(report_id=inspection_id, inline=inline, authorization=authorization)
+    return view_or_download_pdf(report_id=inspection_id, inline=inline, lang=lang, authorization=authorization)
 
 
 @router.get("/inspection/{inspection_id}/docx")
 def download_inspection_docx(
     inspection_id: str,
+    lang: str = Query(default="en"),
     authorization: Optional[str] = Header(None),
 ):
-    return download_docx(report_id=inspection_id, authorization=authorization)
+    return download_docx(report_id=inspection_id, lang=lang, authorization=authorization)
 
 
 # ============================================================
@@ -460,11 +473,12 @@ def download_stored_report(
     report_id: str,
     format: str = Query(default="pdf"),
     inline: bool = Query(default=False),
+    lang: str = Query(default="en"),
     authorization: Optional[str] = Header(None),
 ):
     if format.lower() == "docx":
-        return download_docx(report_id=report_id, authorization=authorization)
-    return view_or_download_pdf(report_id=report_id, inline=inline, authorization=authorization)
+        return download_docx(report_id=report_id, lang=lang, authorization=authorization)
+    return view_or_download_pdf(report_id=report_id, inline=inline, lang=lang, authorization=authorization)
 
 
 # ============================================================
@@ -472,16 +486,20 @@ def download_stored_report(
 # ============================================================
 
 @router.post("/pdf")
-async def download_pdf_report(payload: Dict[str, Any]):
+async def download_pdf_report(
+    payload: Dict[str, Any],
+    lang: Optional[str] = Query(default=None),
+):
     try:
-        pdf_bytes = generate_compliance_pdf(payload)
+        selected_lang = lang or payload.get("language") or "en"
+        pdf_bytes = generate_compliance_pdf(payload, language=selected_lang)
         inspection_id = (
             payload.get("id")
             or payload.get("inspection_id")
             or f"LMR-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
         safe_id = "".join(c for c in str(inspection_id) if c.isalnum() or c in ("-", "_"))
-        filename = f"Compliance_Report_{safe_id}.pdf"
+        filename = f"Compliance_Report_{safe_id}_{selected_lang}.pdf" if selected_lang != "en" else f"Compliance_Report_{safe_id}.pdf"
 
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
@@ -501,16 +519,20 @@ async def download_pdf_report(payload: Dict[str, Any]):
 
 
 @router.post("/docx")
-async def download_docx_report(payload: Dict[str, Any]):
+async def download_docx_report(
+    payload: Dict[str, Any],
+    lang: Optional[str] = Query(default=None),
+):
     try:
-        docx_bytes = generate_compliance_docx(payload)
+        selected_lang = lang or payload.get("language") or "en"
+        docx_bytes = generate_compliance_docx(payload, language=selected_lang)
         inspection_id = (
             payload.get("id")
             or payload.get("inspection_id")
             or f"LMR-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
         safe_id = "".join(c for c in str(inspection_id) if c.isalnum() or c in ("-", "_"))
-        filename = f"Compliance_Report_{safe_id}.docx"
+        filename = f"Compliance_Report_{safe_id}_{selected_lang}.docx" if selected_lang != "en" else f"Compliance_Report_{safe_id}.docx"
 
         return StreamingResponse(
             io.BytesIO(docx_bytes),

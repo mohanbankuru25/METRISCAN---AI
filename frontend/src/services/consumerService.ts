@@ -204,8 +204,16 @@ export const consumerService = {
     return result;
   },
 
-  async downloadConsumerReport(scanId: string, language = "en"): Promise<Blob> {
-    const res = await fetch(`${BACKEND_URL}/api/consumer/scans/${scanId}/report/pdf?lang=${language}`, {
+  async downloadConsumerReport(scanId: string, language?: string): Promise<Blob> {
+    let lang = language;
+    if (!lang) {
+      try {
+        lang = localStorage.getItem("metriscan_preferred_language") || "en";
+      } catch {
+        lang = "en";
+      }
+    }
+    const res = await fetch(`${BACKEND_URL}/api/consumer/scans/${scanId}/report/pdf?lang=${lang}`, {
       headers: this.getAuthHeaders(),
     });
     if (!res.ok) {

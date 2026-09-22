@@ -10,6 +10,7 @@ from app.api.admin import router as admin_router
 from app.api.inspections import router as inspections_router
 from app.api.consumer import router as consumer_router
 from app.api.multi_scan import router as multi_scan_router
+from app.api.inspector import router as inspector_router
 
 
 # =========================================================
@@ -52,6 +53,7 @@ app.include_router(admin_router)
 app.include_router(inspections_router)
 app.include_router(consumer_router)
 app.include_router(multi_scan_router)
+app.include_router(inspector_router)
 
 
 # =========================================================

@@ -335,6 +335,19 @@ class ConsumerService:
                 "ing_none": "Ingredient information could not be reliably extracted from the scanned package.",
                 "nutrition_none": "No reliable nutrition information could be extracted from the scanned package.",
                 "no_age": "No specific age restriction was detected on the scanned label.",
+                "betel_warn": "⚠ HABIT-FORMING / HEALTH WARNING: Contains Betel Nut / Areca Nut (Supari). Consumption is injurious to oral health and strictly not recommended for children or pregnant individuals.",
+                "betel_cat": "Betel Nut & Minor Safety Advisory",
+                "betel_rec": "Contains Betel Nut (Areca catechu). Chewing supari is habit-forming, injurious to oral mucosa, and linked to oral submucous fibrosis (OSF). Strictly not recommended for children or adolescents.",
+                "sweetener_warn": "Contains Artificial Sweetener ({sweetener}). Not recommended for children.",
+                "sweetener_cat": "Artificial Sweetener Advisory",
+                "sweetener_rec": "Contains non-nutritive sweetener ({sweetener}). FSSAI regulations require that food products containing artificial sweeteners are declared not recommended for children.",
+                "cooling_cat": "Cooling Agents & Essential Oils",
+                "cooling_rec": "Contains cooling agents and concentrated essential oils (e.g., Menthol, Borneol, Clove Oil). May cause mucosal irritation or digestive sensitivity in young children or sensitive individuals.",
+                "sodium_warn": "High Sodium Declaration: Label lists {val} sodium.",
+                "sodium_cat": "Sodium & Blood Pressure Guidance",
+                "sodium_rec": "Declared sodium levels are elevated. Consumers monitoring blood pressure or on low-sodium dietary advice should regulate portion sizes.",
+                "no_nutri_cat": "Nutritional Transparency",
+                "no_nutri_rec": "Nutritional values per serving are not declared on this label. Consumers managing specific caloric, sugar, or sodium limits should exercise discretion.",
             },
             "hi": {
                 "expired_warn": "⚠ कालाबाह्य उत्पाद — समाप्ति तिथि: {exp}। पैकेज समाप्ति के आधार पर उपभोग न करें।",
@@ -359,6 +372,19 @@ class ConsumerService:
                 "ing_none": "स्कैन किए गए पैकेज से सामग्री की जानकारी विश्वसनीय रूप से प्राप्त नहीं की जा सकी।",
                 "nutrition_none": "स्कैन किए गए पैकेज से कोई विश्वसनीय पोषण जानकारी प्राप्त नहीं की जा सकी।",
                 "no_age": "स्कैन किए गए लेबल पर कोई विशिष्ट आयु प्रतिबंध नहीं पाया गया।",
+                "betel_warn": "⚠ व्यसनकारी / स्वास्थ्य चेतावनी: इसमें सुपारी / पान मसाला शामिल है। इसका सेवन मौखिक स्वास्थ्य के लिए हानिकारक है और बच्चों के लिए सख्त वर्जित है।",
+                "betel_cat": "सुपारी एवं बाल सुरक्षा परामर्श",
+                "betel_rec": "इस उत्पाद में सुपारी (Areca catechu) है। सुपारी चबाना आदत लगाने वाला और मौखिक स्वास्थ्य के लिए हानिकारक है। बच्चों और किशोरों को इसका सेवन नहीं करना चाहिए।",
+                "sweetener_warn": "कृत्रिम स्वीटनर ({sweetener}) युक्त। बच्चों के लिए अनुशंसित नहीं है।",
+                "sweetener_cat": "कृत्रिम स्वीटनर परामर्श",
+                "sweetener_rec": "इसमें गैर-पोषक स्वीटनर ({sweetener}) है। खाद्य सुरक्षा नियमों के अनुसार कृत्रिम स्वीटनर वाले उत्पाद बच्चों के लिए अनुशंसित नहीं हैं।",
+                "cooling_cat": "शीतलन घटक एवं वाष्पशील तेल",
+                "cooling_rec": "इसमें मेंथॉल, बोर्नियोल या लौंग का तेल शामिल है। यह संवेदनशील व्यक्तियों या छोटे बच्चों में पाचन या मुंह में जलन पैदा कर सकता है।",
+                "sodium_warn": "अधिक सोडियम घोषणा: लेबल पर {val} सोडियम सूचीबद्ध है।",
+                "sodium_cat": "सोडियम एवं रक्तचाप मार्गदर्शन",
+                "sodium_rec": "घोषित सोडियम स्तर अपेक्षाकृत अधिक है। उच्च रक्तचाप या हृदय स्वास्थ्य के प्रति सचेत लोग सेवन सीमित रखें।",
+                "no_nutri_cat": "पोषण पारदर्शिता",
+                "no_nutri_rec": "इस लेबल पर प्रति खुराक पोषण मूल्य घोषित नहीं हैं। कैलोरी, चीनी या सोडियम सीमित करने वाले उपभोक्ताओं को सावधानी बरतनी चाहिए।",
             },
             "mr": {
                 "expired_warn": "⚠ कालबाह्य उत्पादन — कालबाह्यता तारीख: {exp}. सेवन करू नका.",
@@ -383,6 +409,19 @@ class ConsumerService:
                 "ing_none": "स्कॅन केलेल्या पॅकेजवरून घटकांची माहिती मिळवता आली नाही.",
                 "nutrition_none": "स्कॅन केलेल्या पॅकेजवरून कोणतीही विश्वसनीय पोषण माहिती काढता आली नाही.",
                 "no_age": "स्कॅन केलेल्या लेबलवर कोणतेही वयोमर्यादा निर्बंध आढळले नाहीत.",
+                "betel_warn": "⚠ व्यसनकारी / आरोग्य इशारा: यामध्ये सुपारी / पान मसाला समाविष्ट आहे. याचे सेवन आरोग्यास अपायकारक असून मुलांसाठी पूर्णपणे अयोग्य आहे.",
+                "betel_cat": "सुपारी व बाल सुरक्षा सल्ला",
+                "betel_rec": "या उत्पादनात सुपारी समाविष्ट आहे. सुपारी खाणे सवयीचे आणि तोंडाच्या आरोग्यासाठी घातक आहे. लहान मुले व किशोरवयीनांसाठी पूर्णपणे निषिद्ध आहे.",
+                "sweetener_warn": "कृत्रिम गोडवा देणारा घटक ({sweetener}) समाविष्ट. मुलांसाठी अनुशंसित नाही.",
+                "sweetener_cat": "कृत्रिम गोडवा सल्ला",
+                "sweetener_rec": "यात कृत्रिम स्वीटनर ({sweetener}) आहे. अन्न सुरक्षा नियमांनुसार हे घटक लहान मुलांसाठी योग्य नाहीत.",
+                "cooling_cat": "थंडवा देणारे घटक व तेल",
+                "cooling_rec": "यात मेंथॉल, बोर्निओल किंवा लवंग तेल आहे. संवेदनशील व्यक्तींमध्ये हे पचनास किंवा घशास त्रासदायक ठरू शकते.",
+                "sodium_warn": "अधिक सोडियम घोषणा: लेबलवर {val} सोडियम नोंदवले आहे.",
+                "sodium_cat": "सोडियम व रक्तदाब मार्गदर्शन",
+                "sodium_rec": "सोडियमचे प्रमाण जास्त आहे. रक्तदाब नियंत्रित करणाऱ्यांनी मर्यादित प्रमाणात सेवन करावे.",
+                "no_nutri_cat": "पोषण पारदर्शकता",
+                "no_nutri_rec": "या लेबलवर पोषणाचे मूल्य घोषित केलेले नाही. विशिष्ट आहार पाळणाऱ्यांनी विचारपूर्वक सेवन करावे.",
             },
             "te": {
                 "expired_warn": "⚠ గడువు ముగిసిన ఉత్పత్తి — గడువు తేదీ: {exp}. ఉపయోగించవద్దు.",
@@ -407,6 +446,19 @@ class ConsumerService:
                 "ing_none": "స్కాన్ చేసిన ప్యాకేజీ నుండి పదార్థాల వివరాలను సేకరించలేకపోయాము.",
                 "nutrition_none": "స్కాన్ చేసిన ప్యాకేజీ నుండి ఎటువంటి విశ్వసనీయ పోషక సమాచారం లభించలేదు.",
                 "no_age": "స్కాన్ చేసిన లేబుల్‌పై ఎటువంటి నిర్దిష్ట వయస్సు పరిమితులు లేవు.",
+                "betel_warn": "⚠ వ్యసనకారక / ఆరోగ్య హెచ్చరిక: ఇందులో వక్క / సుపారీ ఉంది. దీని వినియోగం నోటి ఆరోగ్యానికి హానికరం మరియు పిల్లలకు ఖచ్చితంగా సిఫార్సు చేయబడదు.",
+                "betel_cat": "వక్క & పిల్లల భద్రతా మార్గదర్శకం",
+                "betel_rec": "ఈ ఉత్పత్తిలో వక్క ఉంది. వక్క నమలడం వ్యసనంగా మారే ప్రమాదం ఉంది మరియు నోటి ఆరోగ్యానికి హానికరం. పిల్లలు దీనికి దూరంగా ఉండాలి.",
+                "sweetener_warn": "కృత్రిమ స్వీటెనర్ ({sweetener}) ఉంది. పిల్లలకు సిఫార్సు చేయబడదు.",
+                "sweetener_cat": "కృత్రిమ స్వీటెనర్ మార్గదర్శకం",
+                "sweetener_rec": "ఇందులో కృత్రిమ స్వీటెనర్ ({sweetener}) ఉంది. ఆహార భద్రతా నిబంధనల ప్రకారం ఇది పిల్లలకు తగినది కాదు.",
+                "cooling_cat": "శీతలీకరణ పదార్థాలు & ఆయిల్స్",
+                "cooling_rec": "ఇందులో మెంథాల్, బోర్నియోల్ లేదా లవంగ నూనె వంటివి ఉన్నాయి. సున్నితమైన జీర్ణవ్యవస్థ ఉన్నవారికి లేదా పిల్లలకు అసౌకర్యం కలిగించవచ్చు.",
+                "sodium_warn": "అధిక సోడియం పరిమాణం: లేబుల్‌పై {val} సోడియం ఉంది.",
+                "sodium_cat": "సోడియం & రక్తపోటు మార్గదర్శకం",
+                "sodium_rec": "సోడియం స్థాయి ఎక్కువగా ఉంది. రక్తపోటు నియంత్రణలో ఉన్నవారు మితంగా తీసుకోవాలి.",
+                "no_nutri_cat": "పోషక పారదర్శకత",
+                "no_nutri_rec": "ఈ లేబుల్‌పై పోషక విలువల వివరాలు లేవు. ఆహార నియమాలు పాటించేవారు జాగ్రత్త వహించాలి.",
             },
             "ta": {
                 "expired_warn": "⚠ காலாவதியான தயாரிப்பு — காலாவதி தேதி: {exp}. உட்கொள்ள வேண்டாம்.",
@@ -431,6 +483,19 @@ class ConsumerService:
                 "ing_none": "ஸ்கேன் செய்யப்பட்ட பேக்கேஜிலிருந்து மூலப்பொருள் தகவல்களை நம்பகத்தன்மையுடன் பெற முடியவில்லை.",
                 "nutrition_none": "ஸ்கேன் செய்யப்பட்ட பேக்கேஜிலிருந்து நம்பகமான ஊட்டச்சத்து தகவல்களைப் பெற முடியவில்லை.",
                 "no_age": "ஸ்கேன் செய்யப்பட்ட லேபிளில் குறிப்பிட்ட வயது வரம்பு ஏதும் கண்டறியப்படவில்லை.",
+                "betel_warn": "⚠ பழக்கத்தை ஏற்படுத்தும் எச்சரிக்கை: இதில் பாக்கு / சுபாரி உள்ளது. வாய் ஆரோக்கியத்திற்கு கேடு மற்றும் குழந்தைகளுக்கு ஏற்றதல்ல.",
+                "betel_cat": "பாக்கு & சிறுவர் பாதுகாப்பு வழிகாட்டல்",
+                "betel_rec": "இந்த தயாரிப்பில் பாக்கு உள்ளது. பாக்கு மெல்லுதல் பழக்கமாகி வாய் நலத்தை பாதிக்கும். குழந்தைகள் கண்டிப்பாக தவிர்க்க வேண்டும்.",
+                "sweetener_warn": "செயற்கை இனிப்பூட்டி ({sweetener}) உள்ளது. குழந்தைகளுக்கு ஏற்றதல்ல.",
+                "sweetener_cat": "செயற்கை இனிப்பூட்டி ஆலோசனை",
+                "sweetener_rec": "இதில் சேர்க்கை இனிப்பூட்டி ({sweetener}) உள்ளது. உணவு பாதுகாப்பு விதிகளின்படி இது குழந்தைகளுக்கு பரிந்துரைக்கப்படவில்லை.",
+                "cooling_cat": "குளிர்ச்சியூட்டும் பொருட்கள் & எண்ணெய்கள்",
+                "cooling_rec": "இதில் மென்தால், போர்னியோல் அல்லது கிராம்பு எண்ணெய் உள்ளது. உணர்திறன் உள்ளவர்கள் அல்லது சிறு குழந்தைகளுக்கு அசௌகரியத்தை ஏற்படுத்தலாம்.",
+                "sodium_warn": "அதிக சோடியம் அறிவிப்பு: லேபிளில் {val} சோடியம் உள்ளது.",
+                "sodium_cat": "சோடியம் & இரத்த அழுத்த வழிகாட்டல்",
+                "sodium_rec": "சோடியம் அளவு அதிகம். இரத்த அழுத்தத்தை கவனிப்பவர்கள் உட்கொள்ளும் அளவைக் கட்டுப்படுத்தவும்.",
+                "no_nutri_cat": "ஊட்டச்சத்து வெளிப்படைத்தன்மை",
+                "no_nutri_rec": "இந்த லேபிளில் ஊட்டச்சத்து விவரங்கள் இல்லை. குறிப்பிட்ட உணவு கட்டுப்பாடு உள்ளவர்கள் எச்சரிக்கையாக இருக்கவும்.",
             },
             "kn": {
                 "expired_warn": "⚠ ಅವಧಿ ಮುಗಿದ ಉತ್ಪನ್ನ — ಮುಕ್ತಾಯ ದಿನಾಂಕ: {exp}. ಸೇವಿಸಬೇಡಿ.",
@@ -455,6 +520,19 @@ class ConsumerService:
                 "ing_none": "ಸ್ಕ್ಯಾನ್ ಮಾಡಿದ ಪ್ಯಾಕೇಜ್‌ನಿಂದ ಪದಾರ್ಥಗಳ ಮಾಹಿತಿಯನ್ನು ವಿಶ್ವಾಸಾರ್ಹವಾಗಿ ಹೊರತೆಗೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.",
                 "nutrition_none": "ಸ್ಕ್ಯಾನ್ ಮಾಡಿದ ಪ್ಯಾಕೇಜ್‌ನಿಂದ ಯಾವುದೇ ವಿಶ್ವಾಸಾರ್ಹ ಪೌಷ್ಟಿಕಾಂಶದ ಮಾಹಿತಿಯನ್ನು ಹೊರತೆಗೆಯಲಾಗಿಲ್ಲ.",
                 "no_age": "ಸ್ಕ್ಯಾನ್ ಮಾಡಿದ ಲೇಬಲ್‌ನಲ್ಲಿ ಯಾವುದೇ ನಿರ್ದಿಷ್ಟ ವಯಸ್ಸಿನ ಮಿತಿ ಕಂಡುಬಂದಿಲ್ಲ.",
+                "betel_warn": "⚠ ಚಟವಾಗುವ ಪದಾರ್ಥದ ಎಚ್ಚರಿಕೆ: ಇದರಲ್ಲಿ ಅಡಿಕೆ / ಸುಪಾರಿ ಇದೆ. ಇದು ಬಾಯಿಯ ಆರೋಗ್ಯಕ್ಕೆ ಹಾನಿಕಾರಕ ಮತ್ತು ಮಕ್ಕಳಿಗೆ ಸೂಕ್ತವಲ್ಲ.",
+                "betel_cat": "ಅಡಿಕೆ ಮತ್ತು ಮಕ್ಕಳ ಸುರಕ್ಷತಾ ಸಲಹೆ",
+                "betel_rec": "ಈ ಉತ್ಪನ್ನದಲ್ಲಿ ಅಡಿಕೆ ಇದೆ. ಅಡಿಕೆ ಅಗಿಯುವುದು ಚಟವಾಗಿ ಪರಿಣಮಿಸಬಹುದು ಮತ್ತು ಬಾಯಿಯ ಆರೋಗ್ಯಕ್ಕೆ ಹಾನಿಕಾರಕ. ಮಕ್ಕಳು ಇದನ್ನು ಸೇವಿಸಬಾರದು.",
+                "sweetener_warn": "ಕೃತಕ ಸಿಹಿಕಾರಕ ({sweetener}) ಇದೆ. ಮಕ್ಕಳಿಗೆ ಶಿಫಾರಸು ಮಾಡುವುದಿಲ್ಲ.",
+                "sweetener_cat": "ಕೃತಕ ಸಿಹಿಕಾರಕ ಸಲಹೆ",
+                "sweetener_rec": "ಇದರಲ್ಲಿ ಕೃತಕ ಸಿಹಿಕಾರಕ ({sweetener}) ಇದೆ. ಆಹಾರ ಸುರಕ್ಷತಾ ನಿಯಮಗಳ ಪ್ರಕಾರ ಇದು ಮಕ್ಕಳಿಗೆ ಸೂಕ್ತವಲ್ಲ.",
+                "cooling_cat": "ತಂಪಾಗಿಸುವ ಪದಾರ್ಥಗಳು ಮತ್ತು ತೈಲಗಳು",
+                "cooling_rec": "ಇದರಲ್ಲಿ ಮೆಂಥಾಲ್, ಬೋರ್ನಿಯೋಲ್ ಅಥವಾ ಲವಂಗ ತೈಲ ಇದೆ. ಸೂಕ್ಷ್ಮ ಜೀರ್ಣಾಂಗ ಹೊಂದಿರುವವರಿಗೆ ಅಥವಾ ಮಕ್ಕಳಿಗೆ ತೊಂದರೆ ಉಂಟುಮಾಡಬಹುದು.",
+                "sodium_warn": "ಹೆಚ್ಚಿನ ಸೋಡಿಯಂ ಪ್ರಮಾಣ: ಲೇಬಲ್‌ನಲ್ಲಿ {val} ಸೋಡಿಯಂ ಘೋಷಿಸಲಾಗಿದೆ.",
+                "sodium_cat": "ಸೋಡಿಯಂ ಮತ್ತು ರಕ್ತದೊತ್ತಡ ಮಾರ್ಗದರ್ಶನ",
+                "sodium_rec": "ಸೋಡಿಯಂ ಪ್ರಮಾಣ ಹೆಚ್ಚಾಗಿದೆ. ರಕ್ತದೊತ್ತಡ ನಿಯಂತ್ರಣದಲ್ಲಿರುವವರು ಮಿತವಾಗಿ ಸೇವಿಸಬೇಕು.",
+                "no_nutri_cat": "ಪೌಷ್ಟಿಕಾಂಶದ ಪಾರದರ್ಶಕತೆ",
+                "no_nutri_rec": "ಈ ಲೇಬಲ್‌ನಲ್ಲಿ ಪೌಷ್ಟಿಕಾಂಶದ ಮೌಲ್ಯಗಳು ಘೋಷಿಸಲ್ಪಟ್ಟಿಲ್ಲ. ಆಹಾರ ನಿಯಮ ಪಾಲಿಸುವವರು ಎಚ್ಚರದಿಂದಿರಬೇಕು.",
             },
         }
         L = loc_texts.get(lang, loc_texts["en"])
@@ -714,6 +792,53 @@ class ConsumerService:
             recommendations.append({
                 "category": L["child_cat"],
                 "text": L["child_rec"],
+            })
+
+        # Check for Betel Nut / Areca Nut / Supari / Pan Masala
+        if re.search(r"\b(?:betel\s*nut|areca(?:\s*nut)?|supari|paan\s*masala|pan\s*masala|gutkha|kattha|chuna|quwam)\b", combined_text, re.IGNORECASE):
+            warnings.append(L.get("betel_warn", loc_texts["en"]["betel_warn"]))
+            recommendations.append({
+                "category": L.get("betel_cat", loc_texts["en"]["betel_cat"]),
+                "text": L.get("betel_rec", loc_texts["en"]["betel_rec"]),
+            })
+
+        # Check for Artificial Sweeteners (Saccharin, Aspartame, Sucralose, etc.)
+        sweetener_match = re.search(r"\b(saccharin|admixture\s+of\s+saccharin|aspartame|sucralose|acesulfame(?:-k|\s*potassium)?|neotame|alitame|cyclamate)\b", combined_text, re.IGNORECASE)
+        if sweetener_match:
+            sw_name = sweetener_match.group(1).title()
+            warnings.append(L.get("sweetener_warn", loc_texts["en"]["sweetener_warn"]).format(sweetener=sw_name))
+            recommendations.append({
+                "category": L.get("sweetener_cat", loc_texts["en"]["sweetener_cat"]),
+                "text": L.get("sweetener_rec", loc_texts["en"]["sweetener_rec"]).format(sweetener=sw_name),
+            })
+
+        # Check for cooling agents and concentrated volatile oils
+        if re.search(r"\b(?:menthol|borneol|camphor|clove\s*oil|eugenol|peppermint\s*oil)\b", combined_text, re.IGNORECASE):
+            recommendations.append({
+                "category": L.get("cooling_cat", loc_texts["en"]["cooling_cat"]),
+                "text": L.get("cooling_rec", loc_texts["en"]["cooling_rec"]),
+            })
+
+        # Check for high sodium in nutrition
+        sodium_str = nutrition.get("sodium") or nutrition.get("salt")
+        if sodium_str:
+            num_s = re.search(r"(\d+(?:\.\d+)?)", sodium_str)
+            if num_s:
+                s_val = float(num_s.group(1))
+                is_g = bool(re.search(r"\bg\b", sodium_str, re.IGNORECASE) and not re.search(r"mg", sodium_str, re.IGNORECASE))
+                s_mg = s_val * 1000 if is_g else s_val
+                if s_mg >= 400:
+                    warnings.append(L.get("sodium_warn", loc_texts["en"]["sodium_warn"]).format(val=sodium_str))
+                    recommendations.append({
+                        "category": L.get("sodium_cat", loc_texts["en"]["sodium_cat"]),
+                        "text": L.get("sodium_rec", loc_texts["en"]["sodium_rec"]),
+                    })
+
+        # Check for undeclared nutrition
+        if not nutrition or len(nutrition) == 0:
+            recommendations.append({
+                "category": L.get("no_nutri_cat", loc_texts["en"]["no_nutri_cat"]),
+                "text": L.get("no_nutri_rec", loc_texts["en"]["no_nutri_rec"]),
             })
 
         if allergens_detected:

@@ -53,6 +53,9 @@ export function AdminRules() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRule, setEditingRule] = useState<ComplianceRule | null>(null);
   const [viewingRule, setViewingRule] = useState<ComplianceRule | null>(null);
+  const [ruleToDelete, setRuleToDelete] = useState<ComplianceRule | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [syncingSeed, setSyncingSeed] = useState(false);
 
   // Document upload & extraction modal states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +66,7 @@ export function AdminRules() {
     storage_path: string;
     upload_date: string;
     rules_detected_count: number;
+    pages_count?: number;
     candidate_rules: any[];
   } | null>(null);
   const [confirmingRules, setConfirmingRules] = useState(false);
@@ -75,6 +79,7 @@ export function AdminRules() {
     try {
       const data = await adminService.uploadRuleDocument(file);
       setExtractedDocData(data);
+      await fetchRules();
     } catch (err: any) {
       alert("Failed to extract rules from document: " + (err.message || "Document error"));
     } finally {
@@ -102,13 +107,46 @@ export function AdminRules() {
     });
   };
 
+  const handleApproveCandidate = async (index: number) => {
+    if (!extractedDocData) return;
+    const rule = extractedDocData.candidate_rules[index];
+    try {
+      if (rule.id) {
+        await adminService.approveRule(rule.id);
+      } else {
+        await adminService.createComplianceRule({ ...rule, status: "APPROVED", active: true });
+      }
+      removeCandidateRule(index);
+      await fetchRules();
+    } catch (err: any) {
+      alert("Failed to approve candidate rule: " + (err?.message || "Error"));
+    }
+  };
+
+  const handleRejectCandidate = async (index: number) => {
+    if (!extractedDocData) return;
+    const rule = extractedDocData.candidate_rules[index];
+    try {
+      if (rule.id) {
+        await adminService.rejectRule(rule.id);
+      }
+      removeCandidateRule(index);
+      await fetchRules();
+    } catch (err: any) {
+      alert("Failed to reject candidate rule: " + (err?.message || "Error"));
+    }
+  };
+
   const addMissingRule = () => {
     if (!extractedDocData) return;
     const newIdx = extractedDocData.candidate_rules.length + 1;
     const newRule = {
       rule_code: `RULE_MANUAL_${newIdx}`,
+      rule_number: String(newIdx),
       rule_name: "Mandatory Statutory Rule",
+      title: "Mandatory Statutory Rule",
       description: "Specification and requirement under Legal Metrology Rules, 2011",
+      requirement: "Specification and requirement under Legal Metrology Rules, 2011",
       category: "GENERAL",
       field_name: "declaration",
       condition_type: "field_presence",
@@ -116,7 +154,12 @@ export function AdminRules() {
       expected_value: "",
       severity: "MANDATORY",
       mandatory: true,
-      active: true,
+      active: false,
+      is_enabled: false,
+      status: "DRAFT",
+      source_page: 1,
+      source_document_name: extractedDocData.document_name,
+      automation_type: "AUTOMATED",
       effective_from: new Date().toISOString().substring(0, 10),
       effective_to: null,
     };
@@ -131,14 +174,65 @@ export function AdminRules() {
     if (!extractedDocData || !extractedDocData.candidate_rules.length) return;
     setConfirmingRules(true);
     try {
-      const res = await adminService.confirmExtractedRules(extractedDocData.candidate_rules);
-      alert(`Success: ${res.confirmed_count} statutory rules saved and activated into Supabase!`);
+      for (const rule of extractedDocData.candidate_rules) {
+        if (rule.id) {
+          await adminService.approveRule(rule.id);
+        } else {
+          await adminService.createComplianceRule({ ...rule, status: "APPROVED", active: true });
+        }
+      }
+      alert(`Success: ${extractedDocData.candidate_rules.length} statutory rules approved and activated into Supabase!`);
       setExtractedDocData(null);
       await fetchRules();
     } catch (err: any) {
-      alert("Failed to confirm rules: " + (err.message || "Network error"));
+      alert("Failed to approve rules: " + (err.message || "Network error"));
     } finally {
       setConfirmingRules(false);
+    }
+  };
+
+  const handleApproveRule = async (ruleId: string) => {
+    try {
+      const updated = await adminService.approveRule(ruleId);
+      setRules((prev) => prev.map((r) => (r.id === ruleId ? updated : r)));
+    } catch (err: any) {
+      alert("Failed to approve rule: " + (err?.message || "Error"));
+    }
+  };
+
+  const handleRejectRule = async (ruleId: string) => {
+    try {
+      const updated = await adminService.rejectRule(ruleId);
+      setRules((prev) => prev.map((r) => (r.id === ruleId ? updated : r)));
+    } catch (err: any) {
+      alert("Failed to reject rule: " + (err?.message || "Error"));
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!ruleToDelete) return;
+    setDeleting(true);
+    try {
+      await adminService.deleteComplianceRule(ruleToDelete.id);
+      setRules((prev) => prev.filter((r) => r.id !== ruleToDelete.id));
+      setRuleToDelete(null);
+    } catch (err: any) {
+      alert("Failed to delete rule: " + (err?.message || "Error"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSeedStandardRules = async () => {
+    setSyncingSeed(true);
+    try {
+      const res = await adminService.seedDefaultRules();
+      alert(`Standard Legal Metrology Rules Synced: ${res.seeded_count} newly seeded, ${res.skipped_existing_count} already active.`);
+      await fetchRules();
+    } catch (err: any) {
+      alert("Failed to sync standard rules: " + (err?.message || "Error"));
+    } finally {
+      setSyncingSeed(false);
     }
   };
 
@@ -191,7 +285,9 @@ export function AdminRules() {
     setFormData({
       rule_code: "",
       title: "",
+      rule_name: "",
       description: "",
+      requirement: "",
       category: "MRP",
       field_name: "mrp",
       condition_type: "presence",
@@ -201,6 +297,7 @@ export function AdminRules() {
       legal_act: "Legal Metrology (Packaged Commodities) Rules, 2011",
       penalty_clause: "Rule 32 / Section 36(1)",
       is_active: true,
+      active: true,
     });
     setFormError(null);
     setShowCreateModal(true);
@@ -208,7 +305,15 @@ export function AdminRules() {
 
   const openEditModal = (rule: ComplianceRule) => {
     setEditingRule(rule);
-    setFormData({ ...rule });
+    setFormData({
+      ...rule,
+      title: rule.title || rule.rule_name || "",
+      rule_name: rule.rule_name || rule.title || "",
+      description: rule.description || rule.requirement || "",
+      requirement: rule.requirement || rule.description || "",
+      is_active: rule.is_active ?? rule.active ?? true,
+      active: rule.active ?? rule.is_active ?? true,
+    });
     setFormError(null);
   };
 
@@ -216,27 +321,43 @@ export function AdminRules() {
     e.preventDefault();
     setFormError(null);
 
-    if (!formData.rule_code?.trim()) {
+    const ruleCode = (formData.rule_code || "").trim();
+    const ruleTitle = (formData.title || formData.rule_name || "").trim();
+    const ruleDesc = (formData.description || formData.requirement || "").trim();
+
+    if (!ruleCode) {
       setFormError("Rule code is required (e.g. RULE_6_1_A)");
       return;
     }
-    if (!formData.title?.trim()) {
+    if (!ruleTitle) {
       setFormError("Rule title is required");
       return;
     }
-    if (!formData.description?.trim()) {
+    if (!ruleDesc) {
       setFormError("Description is required");
       return;
     }
 
+    const isActive = formData.is_active ?? formData.active ?? true;
+    const rulePayload = {
+      ...formData,
+      rule_code: ruleCode,
+      title: ruleTitle,
+      rule_name: ruleTitle,
+      description: ruleDesc,
+      requirement: ruleDesc,
+      active: isActive,
+      is_active: isActive,
+    };
+
     setSubmitting(true);
     try {
       if (editingRule) {
-        const updated = await adminService.updateComplianceRule(editingRule.id, formData);
+        const updated = await adminService.updateComplianceRule(editingRule.id, rulePayload);
         setRules((prev) => prev.map((r) => (r.id === editingRule.id ? updated : r)));
         setEditingRule(null);
       } else {
-        const created = await adminService.createComplianceRule(formData);
+        const created = await adminService.createComplianceRule(rulePayload);
         setRules((prev) => [created, ...prev]);
         setShowCreateModal(false);
       }
@@ -251,31 +372,45 @@ export function AdminRules() {
   const filteredRules = rules.filter((r) => {
     const q = search.toLowerCase();
     const ruleTitle = (r.title || r.rule_name || "").toLowerCase();
-    const ruleDesc = (r.description || "").toLowerCase();
+    const ruleDesc = (r.description || r.requirement || "").toLowerCase();
     const ruleAct = (r.legal_act || "").toLowerCase();
+    const ruleRef = (r.statutory_reference || "").toLowerCase();
+    const ruleDoc = (r.source_document_name || "").toLowerCase();
     const isActive = r.active ?? r.is_active ?? true;
+    const ruleStatus = (r.status || "APPROVED").toUpperCase();
 
     const matchesSearch =
       !search ||
       r.rule_code.toLowerCase().includes(q) ||
+      (r.rule_number && r.rule_number.toLowerCase().includes(q)) ||
       ruleTitle.includes(q) ||
       ruleDesc.includes(q) ||
-      ruleAct.includes(q);
+      ruleAct.includes(q) ||
+      ruleRef.includes(q) ||
+      ruleDoc.includes(q);
 
     const matchesSeverity = severityFilter === "ALL" || r.severity === severityFilter;
     const matchesCategory = categoryFilter === "ALL" || r.category === categoryFilter;
-    const matchesStatus =
-      statusFilter === "ALL" ||
-      (statusFilter === "ACTIVE" && isActive) ||
-      (statusFilter === "INACTIVE" && !isActive);
+
+    let matchesStatus = true;
+    if (statusFilter === "ACTIVE") {
+      matchesStatus = isActive && ruleStatus === "APPROVED";
+    } else if (statusFilter === "INACTIVE") {
+      matchesStatus = !isActive || ruleStatus === "REJECTED";
+    } else if (statusFilter === "DRAFT") {
+      matchesStatus = ruleStatus === "DRAFT";
+    } else if (statusFilter === "APPROVED") {
+      matchesStatus = ruleStatus === "APPROVED";
+    }
 
     return matchesSearch && matchesSeverity && matchesCategory && matchesStatus;
   });
 
   const totalCount = rules.length;
-  const activeCount = rules.filter((r) => (r.active ?? r.is_active ?? true)).length;
-  const mandatoryCount = rules.filter((r) => r.severity === "MANDATORY").length;
-  const warningCount = rules.filter((r) => r.severity === "WARNING").length;
+  const activeCount = rules.filter((r) => (r.active ?? r.is_active ?? true) && r.status !== "DRAFT").length;
+  const draftCount = rules.filter((r) => r.status === "DRAFT").length;
+  const mandatoryCount = rules.filter((r) => r.severity === "MANDATORY" || r.severity === "CRITICAL").length;
+  const warningCount = rules.filter((r) => r.severity === "WARNING" || r.severity === "HIGH").length;
 
   return (
     <PageContainer>
@@ -295,7 +430,7 @@ export function AdminRules() {
               </p>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <button onClick={() => navigate("/admin")} className="btn btn-secondary btn-sm">
                 <ArrowLeft size={14} />
                 <span>Dashboard</span>
@@ -317,6 +452,16 @@ export function AdminRules() {
                 {uploadingDoc ? <Loader2 size={15} className="spin-animate" /> : <Upload size={15} />}
                 <span>{uploadingDoc ? "Extracting Rules..." : "Upload Rule Document"}</span>
               </button>
+              <button
+                onClick={handleSeedStandardRules}
+                className="btn btn-secondary btn-sm"
+                title="Sync standard Legal Metrology rules (LM-01 to LM-34)"
+                disabled={syncingSeed}
+                style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+              >
+                {syncingSeed ? <Loader2 size={14} className="spin-animate" /> : <Scale size={14} />}
+                <span>Sync Baseline Rules</span>
+              </button>
               <button onClick={openCreateModal} className="btn btn-primary btn-sm" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
                 <Plus size={16} />
                 <span>Create New Rule</span>
@@ -336,7 +481,7 @@ export function AdminRules() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
               gap: "1rem",
               marginTop: "1.25rem",
               paddingTop: "1.25rem",
@@ -351,13 +496,20 @@ export function AdminRules() {
               <div style={{ fontSize: "0.75rem", color: "#166534", fontWeight: 600, textTransform: "uppercase" }}>Active / Enforced</div>
               <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#15803d", marginTop: "0.2rem" }}>{activeCount}</div>
             </div>
-            <div style={{ padding: "0.75rem 1rem", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
-              <div style={{ fontSize: "0.75rem", color: "#991b1b", fontWeight: 600, textTransform: "uppercase" }}>Mandatory Clauses</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#dc2626", marginTop: "0.2rem" }}>{mandatoryCount}</div>
-            </div>
-            <div style={{ padding: "0.75rem 1rem", background: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a" }}>
-              <div style={{ fontSize: "0.75rem", color: "#92400e", fontWeight: 600, textTransform: "uppercase" }}>Warning / Advisory</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#d97706", marginTop: "0.2rem" }}>{warningCount}</div>
+            {draftCount > 0 ? (
+              <div style={{ padding: "0.75rem 1rem", background: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a" }}>
+                <div style={{ fontSize: "0.75rem", color: "#92400e", fontWeight: 600, textTransform: "uppercase" }}>Pending Review (Drafts)</div>
+                <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#b45309", marginTop: "0.2rem" }}>{draftCount}</div>
+              </div>
+            ) : (
+              <div style={{ padding: "0.75rem 1rem", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
+                <div style={{ fontSize: "0.75rem", color: "#991b1b", fontWeight: 600, textTransform: "uppercase" }}>Mandatory Clauses</div>
+                <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#dc2626", marginTop: "0.2rem" }}>{mandatoryCount}</div>
+              </div>
+            )}
+            <div style={{ padding: "0.75rem 1rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 600, textTransform: "uppercase" }}>High Priority</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1e293b", marginTop: "0.2rem" }}>{warningCount}</div>
             </div>
           </div>
         </div>
@@ -371,7 +523,7 @@ export function AdminRules() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search rule code, title, statute, or act..."
+                placeholder="Search rule code, number, title, requirement, or PDF..."
                 className="form-input"
                 style={{ paddingLeft: "2.25rem", width: "100%", fontSize: "0.875rem" }}
               />
@@ -403,9 +555,11 @@ export function AdminRules() {
                 style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
               >
                 <option value="ALL">ALL SEVERITY</option>
+                <option value="CRITICAL">CRITICAL</option>
                 <option value="MANDATORY">MANDATORY</option>
-                <option value="WARNING">WARNING</option>
-                <option value="OPTIONAL">OPTIONAL</option>
+                <option value="HIGH">HIGH</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="LOW">LOW</option>
               </select>
             </div>
 
@@ -418,8 +572,10 @@ export function AdminRules() {
                 style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
               >
                 <option value="ALL">ALL STATUS</option>
-                <option value="ACTIVE">ACTIVE ONLY</option>
-                <option value="INACTIVE">INACTIVE ONLY</option>
+                <option value="ACTIVE">ACTIVE / ENFORCED</option>
+                <option value="DRAFT">DRAFT (PENDING REVIEW)</option>
+                <option value="APPROVED">APPROVED ONLY</option>
+                <option value="INACTIVE">DISABLED / INACTIVE</option>
               </select>
             </div>
           </div>
@@ -444,7 +600,7 @@ export function AdminRules() {
               <span>Configured Rules ({filteredRules.length})</span>
             </div>
             <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
-              Evaluated automatically during inspection image analysis
+              Evaluated dynamically during inspector scanning &amp; compliance reports
             </span>
           </div>
 
@@ -462,8 +618,10 @@ export function AdminRules() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", padding: "1.25rem" }}>
               {filteredRules.map((rule) => {
-                const isMandatory = rule.severity === "MANDATORY";
-                const isWarning = rule.severity === "WARNING";
+                const isCritical = rule.severity === "CRITICAL" || rule.severity === "MANDATORY";
+                const isHigh = rule.severity === "HIGH" || rule.severity === "WARNING";
+                const isDraft = rule.status === "DRAFT";
+                const isRejected = rule.status === "REJECTED";
 
                 return (
                   <div
@@ -471,13 +629,21 @@ export function AdminRules() {
                     style={{
                       padding: "1.25rem",
                       borderRadius: "10px",
-                      border: rule.is_active ? "1px solid #e2e8f0" : "1px dashed #cbd5e1",
-                      backgroundColor: rule.is_active ? "#ffffff" : "#f8fafc",
+                      border: isDraft
+                        ? "1px solid #fde68a"
+                        : rule.is_active
+                        ? "1px solid #e2e8f0"
+                        : "1px dashed #cbd5e1",
+                      backgroundColor: isDraft
+                        ? "#fffdf5"
+                        : rule.is_active
+                        ? "#ffffff"
+                        : "#f8fafc",
                       display: "flex",
                       flexDirection: "column",
                       gap: "0.75rem",
                       boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-                      opacity: rule.is_active ? 1 : 0.75,
+                      opacity: isRejected ? 0.65 : rule.is_active || isDraft ? 1 : 0.75,
                       transition: "all 0.15s ease"
                     }}
                   >
@@ -497,6 +663,20 @@ export function AdminRules() {
                         >
                           {rule.rule_code}
                         </span>
+                        {rule.rule_number && (
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              padding: "0.2rem 0.45rem",
+                              borderRadius: "4px",
+                              backgroundColor: "#e0f2fe",
+                              color: "#0369a1",
+                            }}
+                          >
+                            Rule {rule.rule_number}
+                          </span>
+                        )}
                         <span
                           style={{
                             fontSize: "0.7rem",
@@ -510,42 +690,99 @@ export function AdminRules() {
                         >
                           {rule.category}
                         </span>
-                        <strong style={{ fontSize: "1.05rem", color: "#0f172a" }}>{rule.title}</strong>
+                        <strong style={{ fontSize: "1.05rem", color: "#0f172a" }}>{rule.title || rule.rule_name}</strong>
                       </div>
 
                       {/* Right badges & actions */}
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                         <span
                           style={{
                             fontSize: "0.7rem",
                             fontWeight: 800,
                             padding: "0.2rem 0.55rem",
                             borderRadius: "6px",
-                            backgroundColor: isMandatory ? "#fef2f2" : isWarning ? "#fffbeb" : "#f1f5f9",
-                            color: isMandatory ? "#b91c1c" : isWarning ? "#b45309" : "#475569",
-                            border: `1px solid ${isMandatory ? "#fecaca" : isWarning ? "#fde68a" : "#e2e8f0"}`
+                            backgroundColor: isCritical ? "#fef2f2" : isHigh ? "#fffbeb" : "#f1f5f9",
+                            color: isCritical ? "#b91c1c" : isHigh ? "#b45309" : "#475569",
+                            border: `1px solid ${isCritical ? "#fecaca" : isHigh ? "#fde68a" : "#e2e8f0"}`
                           }}
                         >
                           {rule.severity}
                         </span>
 
-                        <span
-                          style={{
-                            fontSize: "0.7rem",
-                            fontWeight: 700,
-                            padding: "0.2rem 0.55rem",
-                            borderRadius: "6px",
-                            backgroundColor: rule.is_active ? "#ecfdf5" : "#f1f5f9",
-                            color: rule.is_active ? "#047857" : "#64748b",
-                            border: `1px solid ${rule.is_active ? "#a7f3d0" : "#cbd5e1"}`,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.3rem"
-                          }}
-                        >
-                          {rule.is_active ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                          {rule.is_active ? "ENFORCED" : "DISABLED"}
-                        </span>
+                        {isDraft ? (
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 800,
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "6px",
+                              backgroundColor: "#fef3c7",
+                              color: "#92400e",
+                              border: "1px solid #fde68a",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem"
+                            }}
+                          >
+                            <AlertCircle size={12} />
+                            DRAFT — REVIEW REQUIRED
+                          </span>
+                        ) : isRejected ? (
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "6px",
+                              backgroundColor: "#f1f5f9",
+                              color: "#64748b",
+                              border: "1px solid #cbd5e1"
+                            }}
+                          >
+                            REJECTED
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "6px",
+                              backgroundColor: rule.is_active ? "#ecfdf5" : "#f1f5f9",
+                              color: rule.is_active ? "#047857" : "#64748b",
+                              border: `1px solid ${rule.is_active ? "#a7f3d0" : "#cbd5e1"}`,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem"
+                            }}
+                          >
+                            {rule.is_active ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                            {rule.is_active ? "ENFORCED" : "DISABLED"}
+                          </span>
+                        )}
+
+                        {isDraft && (
+                          <>
+                            <button
+                              onClick={() => handleApproveRule(rule.id)}
+                              className="btn btn-sm"
+                              style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem", backgroundColor: "#166534", color: "#ffffff", borderColor: "#166534", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
+                              title="Approve and activate this rule"
+                            >
+                              <Check size={13} />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              onClick={() => handleRejectRule(rule.id)}
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem", color: "#b91c1c", borderColor: "#fecaca", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
+                              title="Reject draft rule"
+                            >
+                              <X size={13} />
+                              <span>Reject</span>
+                            </button>
+                          </>
+                        )}
 
                         <button
                           onClick={() => setViewingRule(rule)}
@@ -563,18 +800,28 @@ export function AdminRules() {
                         >
                           <Edit2 size={14} />
                         </button>
+                        {!isDraft && (
+                          <button
+                            onClick={() => handleToggleStatus(rule)}
+                            className={`btn btn-sm ${rule.is_active ? "btn-secondary" : "btn-primary"}`}
+                            style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem" }}
+                          >
+                            {rule.is_active ? "Disable" : "Enable"}
+                          </button>
+                        )}
                         <button
-                          onClick={() => handleToggleStatus(rule)}
-                          className={`btn btn-sm ${rule.is_active ? "btn-secondary" : "btn-primary"}`}
-                          style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem" }}
+                          onClick={() => setRuleToDelete(rule)}
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: "0.3rem 0.5rem", color: "#dc2626", borderColor: "#fee2e2" }}
+                          title="Delete / Deactivate Rule"
                         >
-                          {rule.is_active ? "Disable" : "Enable"}
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
 
                     <p style={{ fontSize: "0.875rem", color: "#334155", margin: 0, lineHeight: 1.5 }}>
-                      {rule.description}
+                      {rule.requirement || rule.description}
                     </p>
 
                     {/* Metadata strip */}
@@ -594,20 +841,29 @@ export function AdminRules() {
                       <div>
                         <span style={{ fontWeight: 600, color: "#475569" }}>Field Evaluated:</span>{" "}
                         <code style={{ background: "#e2e8f0", padding: "0.1rem 0.35rem", borderRadius: "3px" }}>
-                          {rule.field_name || "N/A"}
+                          {rule.field_name || "declaration"}
                         </code>
                       </div>
                       <div>
                         <span style={{ fontWeight: 600, color: "#475569" }}>Condition:</span>{" "}
-                        <span>{rule.condition_type} ({rule.operator})</span>
+                        <span>{rule.condition_type} ({rule.operator || "exists"})</span>
                       </div>
+                      {rule.automation_type && (
+                        <div>
+                          <span style={{ fontWeight: 600, color: "#475569" }}>Automation:</span>{" "}
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>{rule.automation_type}</span>
+                        </div>
+                      )}
+                      {rule.source_document_name && (
+                        <div>
+                          <span style={{ fontWeight: 600, color: "#475569" }}>Source Document:</span>{" "}
+                          <span style={{ color: "#1e3a8a", fontWeight: 600 }}>{rule.source_document_name}</span>
+                          {rule.source_page ? <span> (Page {rule.source_page})</span> : null}
+                        </div>
+                      )}
                       <div>
-                        <span style={{ fontWeight: 600, color: "#475569" }}>Legal Act:</span>{" "}
-                        <span>{rule.legal_act}</span>
-                      </div>
-                      <div>
-                        <span style={{ fontWeight: 600, color: "#475569" }}>Statutory Penalty:</span>{" "}
-                        <span style={{ color: "#b91c1c", fontWeight: 600 }}>{rule.penalty_clause || "Standard Section 36"}</span>
+                        <span style={{ fontWeight: 600, color: "#475569" }}>Legal Reference:</span>{" "}
+                        <span>{rule.statutory_reference || rule.legal_act || "Legal Metrology Rules, 2011"}</span>
                       </div>
                     </div>
                   </div>
@@ -932,21 +1188,27 @@ export function AdminRules() {
       {/* REVIEW EXTRACTED RULES POPUP / MODAL */}
       {extractedDocData && (
         <div className="modal-backdrop" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15, 23, 42, 0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 110, padding: "1rem" }}>
-          <div className="panel-card" style={{ maxWidth: "1150px", width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", padding: "1.5rem" }}>
+          <div className="panel-card" style={{ maxWidth: "1280px", width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", padding: "1.5rem" }}>
             {/* Modal Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #e2e8f0", paddingBottom: "1rem", marginBottom: "1rem" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <ShieldCheck size={24} color="#166534" />
                   <h2 style={{ margin: 0, fontSize: "1.35rem", color: "#0f172a", fontWeight: 800 }}>
-                    Review Extracted Rules
+                    Review Extracted Statutory Rules
                   </h2>
                 </div>
-                <div style={{ display: "flex", gap: "1.25rem", marginTop: "0.4rem", fontSize: "0.825rem", color: "#475569" }}>
+                <div style={{ display: "flex", gap: "1.25rem", marginTop: "0.4rem", fontSize: "0.825rem", color: "#475569", flexWrap: "wrap" }}>
                   <span><strong>Document:</strong> {extractedDocData.document_name}</span>
                   <span><strong>Upload Date:</strong> {extractedDocData.upload_date}</span>
                   <span style={{ color: "#166534", fontWeight: 700 }}>
                     <strong>Detected Rules:</strong> {extractedDocData.rules_detected_count}
+                  </span>
+                  {extractedDocData.pages_count && (
+                    <span><strong>Pages Parsed:</strong> {extractedDocData.pages_count}</span>
+                  )}
+                  <span style={{ color: "#b45309", fontSize: "0.78rem" }}>
+                    * Rules are saved as DRAFT. Review &amp; approve to activate for compliance scanning.
                   </span>
                 </div>
               </div>
@@ -961,20 +1223,22 @@ export function AdminRules() {
 
             {/* Extracted Rules Table */}
             <div style={{ flex: 1, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "1rem" }}>
-              <table className="gov-table" style={{ fontSize: "0.825rem" }}>
+              <table className="gov-table" style={{ fontSize: "0.825rem", minWidth: "1150px" }}>
                 <thead style={{ position: "sticky", top: 0, backgroundColor: "#f8fafc", zIndex: 2 }}>
                   <tr>
-                    <th style={{ width: "130px" }}>Rule Code</th>
-                    <th style={{ width: "180px" }}>Rule Name</th>
+                    <th style={{ width: "120px" }}>Rule Code</th>
+                    <th style={{ width: "55px", textAlign: "center" }}>Page</th>
+                    <th style={{ width: "160px" }}>Rule Name</th>
                     <th>Requirement / Description</th>
-                    <th style={{ width: "110px" }}>Category</th>
-                    <th style={{ width: "110px" }}>Field</th>
-                    <th style={{ width: "100px" }}>Condition</th>
-                    <th style={{ width: "80px" }}>Expected</th>
-                    <th style={{ width: "70px" }}>Operator</th>
-                    <th style={{ width: "95px" }}>Severity</th>
-                    <th style={{ width: "60px", textAlign: "center" }}>Active</th>
-                    <th style={{ width: "50px", textAlign: "center" }}>Action</th>
+                    <th style={{ width: "105px" }}>Category</th>
+                    <th style={{ width: "100px" }}>Field</th>
+                    <th style={{ width: "95px" }}>Condition</th>
+                    <th style={{ width: "75px" }}>Expected</th>
+                    <th style={{ width: "65px" }}>Op</th>
+                    <th style={{ width: "95px" }}>Automation</th>
+                    <th style={{ width: "90px" }}>Severity</th>
+                    <th style={{ width: "50px", textAlign: "center" }}>Active</th>
+                    <th style={{ width: "105px", textAlign: "center" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -989,19 +1253,30 @@ export function AdminRules() {
                           style={{ width: "100%", padding: "0.25rem 0.4rem", fontSize: "0.78rem", border: "1px solid #cbd5e1", borderRadius: "4px" }}
                         />
                       </td>
+                      <td style={{ textAlign: "center" }}>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0369a1", backgroundColor: "#e0f2fe", padding: "0.15rem 0.35rem", borderRadius: "4px" }}>
+                          P.{rule.source_page || 1}
+                        </span>
+                      </td>
                       <td>
                         <input
                           type="text"
-                          value={rule.rule_name}
-                          onChange={(e) => updateCandidateRule(idx, "rule_name", e.target.value)}
+                          value={rule.rule_name || rule.title || ""}
+                          onChange={(e) => {
+                            updateCandidateRule(idx, "rule_name", e.target.value);
+                            updateCandidateRule(idx, "title", e.target.value);
+                          }}
                           style={{ width: "100%", padding: "0.25rem 0.4rem", fontSize: "0.78rem", border: "1px solid #cbd5e1", borderRadius: "4px" }}
                         />
                       </td>
                       <td>
                         <textarea
                           rows={2}
-                          value={rule.description}
-                          onChange={(e) => updateCandidateRule(idx, "description", e.target.value)}
+                          value={rule.requirement || rule.description || ""}
+                          onChange={(e) => {
+                            updateCandidateRule(idx, "description", e.target.value);
+                            updateCandidateRule(idx, "requirement", e.target.value);
+                          }}
                           style={{ width: "100%", padding: "0.25rem 0.4rem", fontSize: "0.75rem", border: "1px solid #cbd5e1", borderRadius: "4px", resize: "vertical" }}
                         />
                       </td>
@@ -1019,7 +1294,7 @@ export function AdminRules() {
                       <td>
                         <input
                           type="text"
-                          value={rule.field_name}
+                          value={rule.field_name || "declaration"}
                           onChange={(e) => updateCandidateRule(idx, "field_name", e.target.value)}
                           style={{ width: "100%", padding: "0.25rem 0.4rem", fontSize: "0.75rem", border: "1px solid #cbd5e1", borderRadius: "4px" }}
                         />
@@ -1047,7 +1322,7 @@ export function AdminRules() {
                       </td>
                       <td>
                         <select
-                          value={rule.operator}
+                          value={rule.operator || "exists"}
                           onChange={(e) => updateCandidateRule(idx, "operator", e.target.value)}
                           style={{ width: "100%", padding: "0.25rem 0.2rem", fontSize: "0.75rem", border: "1px solid #cbd5e1", borderRadius: "4px" }}
                         >
@@ -1056,6 +1331,17 @@ export function AdminRules() {
                           <option value="gte">&gt;=</option>
                           <option value="lte">&lt;=</option>
                           <option value="regex">regex</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={rule.automation_type || "AUTOMATED"}
+                          onChange={(e) => updateCandidateRule(idx, "automation_type", e.target.value)}
+                          style={{ width: "100%", padding: "0.25rem 0.2rem", fontSize: "0.72rem", border: "1px solid #cbd5e1", borderRadius: "4px", fontWeight: 600 }}
+                        >
+                          <option value="AUTOMATED">AUTOMATED</option>
+                          <option value="HYBRID">HYBRID</option>
+                          <option value="MANUAL">MANUAL</option>
                         </select>
                       </td>
                       <td>
@@ -1078,14 +1364,32 @@ export function AdminRules() {
                         />
                       </td>
                       <td style={{ textAlign: "center" }}>
-                        <button
-                          onClick={() => removeCandidateRule(idx)}
-                          className="btn btn-danger btn-sm"
-                          style={{ padding: "0.2rem 0.4rem" }}
-                          title="Remove/Ignore candidate rule"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>
+                          <button
+                            onClick={() => handleApproveCandidate(idx)}
+                            className="btn btn-sm"
+                            style={{ padding: "0.2rem 0.35rem", backgroundColor: "#166534", color: "#fff", borderColor: "#166534" }}
+                            title="Approve and activate this candidate rule"
+                          >
+                            <Check size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleRejectCandidate(idx)}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: "0.2rem 0.35rem", color: "#b91c1c", borderColor: "#fecaca" }}
+                            title="Reject candidate rule"
+                          >
+                            <X size={12} />
+                          </button>
+                          <button
+                            onClick={() => removeCandidateRule(idx)}
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: "0.2rem 0.35rem" }}
+                            title="Remove from queue"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1131,6 +1435,52 @@ export function AdminRules() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {ruleToDelete && (
+        <div className="modal-backdrop" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15, 23, 42, 0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 120, padding: "1rem" }}>
+          <div className="panel-card" style={{ maxWidth: "480px", width: "100%", padding: "1.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <AlertTriangle size={22} color="#dc2626" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#0f172a", fontWeight: 700 }}>
+                  Delete Compliance Rule
+                </h3>
+                <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  {ruleToDelete.rule_code} — {ruleToDelete.title || ruleToDelete.rule_name}
+                </span>
+              </div>
+            </div>
+            <p style={{ fontSize: "0.875rem", color: "#475569", lineHeight: 1.5, margin: "0 0 1.25rem" }}>
+              Are you sure you want to delete this rule? This rule will be deactivated and no longer evaluated for future inspections. Historical inspection reports remain intact.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button
+                onClick={() => setRuleToDelete(null)}
+                className="btn btn-secondary btn-sm"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="btn btn-danger btn-sm"
+                style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <Loader2 size={14} className="spin-animate" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
+                <span>Confirm Deletion</span>
+              </button>
             </div>
           </div>
         </div>

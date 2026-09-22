@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Shield, Scale, Building2, LogOut, ChevronDown, User } from "lucide-react";
+import { Shield, Scale, Building2, LogOut, ChevronDown, User, Bell } from "lucide-react";
 import { authService } from "../../services/authService";
 import type { UserProfile } from "../../types/platform";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -40,6 +40,7 @@ export function Topbar() {
     if (p.startsWith("/admin/analytics")) return t("officer.analytics", "Compliance Analytics & Violation Intelligence");
     if (p.startsWith("/admin/reports")) return t("officer.reports", "Official Inspection Reports Repository");
     if (p.startsWith("/admin/rules")) return t("officer.rulesManagement", "Dynamic Statutory Compliance Rule Registry");
+    if (p.startsWith("/admin/notifications")) return t("officer.notifications", "Notifications & Rule Requests");
     if (p.startsWith("/admin/logs")) return t("officer.auditLogs", "System Activity & Audit Trails");
     if (p.startsWith("/admin/settings")) return t("officer.settings", "Central Administration Settings");
 
@@ -48,6 +49,7 @@ export function Topbar() {
     if (p.startsWith("/inspector/history/")) return t("officer.inspectionHistory", "Statutory Inspection Dossier");
     if (p.startsWith("/inspector/history")) return t("officer.inspectionHistory", "Inspector Inspection Archive");
     if (p.startsWith("/inspector/reports")) return t("officer.reportsDossiers", "Certified Compliance Reports");
+    if (p.startsWith("/inspector/rules")) return t("officer.rules", "Statutory Compliance Rules Catalog");
     if (p.startsWith("/inspector/settings")) return t("officer.profileSettings", "Officer Profile & Regulatory Rules");
 
     return t("officer.topbarTitle", "Legal Metrology Compliance Platform");
@@ -110,6 +112,30 @@ export function Topbar() {
           <Shield size={13} />
           <span>{t("officer.engineActive", "PaddleOCR + Vision AI Active")}</span>
         </div>
+
+        {/* Admin Notification Quick Access */}
+        {isAdmin && (
+          <button
+            onClick={() => navigate("/admin/notifications")}
+            title="Inspector Rule Requests & Notifications"
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              backgroundColor: path.startsWith("/admin/notifications") ? "#eff6ff" : "#ffffff",
+              color: path.startsWith("/admin/notifications") ? "#2563eb" : "#64748b",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Bell size={18} />
+          </button>
+        )}
 
         {/* Global Language Selector */}
         <LanguageSelector variant="compact" />

@@ -2059,3 +2059,85 @@ def get_baseline_info() -> Dict[str, Any]:
     """
 
     return RULE_BASELINE
+
+
+# ============================================================
+# SEEDING HELPER FOR SUPABASE
+# ============================================================
+
+def get_seed_records() -> List[Dict[str, Any]]:
+    """
+    Translates all consolidated Legal Metrology rules from RULE_MASTER
+    into standardized records for Supabase compliance_rules seeding.
+    Preserves rule IDs, rule numbers, legal requirements, applicability,
+    automation types, evidence requirements, and severity.
+    """
+    records: List[Dict[str, Any]] = []
+
+    for rule in RULE_MASTER:
+        rule_code = rule.get("rule_id", "")
+        rule_num = rule.get("rule_number", "")
+        rule_name = rule.get("rule_name", "")
+        category = rule.get("category", "GENERAL")
+        requirement = rule.get("requirement", "")
+        applicability = rule.get("applicability", "")
+        expected = rule.get("expected", "")
+        evidence_needed = rule.get("evidence_needed", [])
+        automation = rule.get("automation", {})
+        automation_type = automation.get("type", "AUTOMATED")
+        rule_ref = rule.get("rule_reference", f"Legal Metrology Rules, 2011 - Rule {rule_num}")
+
+        # Determine severity based on statutory weight
+        if category in ("MANDATORY_DECLARATIONS", "LEGAL_STATUS") or rule_num in ("6", "7", "8", "9", "10", "11", "12", "18", "24"):
+            severity = "CRITICAL"
+        elif rule_num in ("13", "14", "15", "16", "17", "23", "32"):
+            severity = "HIGH"
+        else:
+            severity = "MEDIUM"
+
+        # Special handling for omitted rules (e.g. Rule 5 omitted in 2021)
+        is_omitted = rule.get("status") == "OMITTED"
+        active_status = not is_omitted
+        rule_status = "OMITTED" if is_omitted else "APPROVED"
+
+        field_name = "declaration"
+        condition_type = "field_presence"
+        if category == "MRP":
+            field_name = "mrp"
+        elif category == "NET_QUANTITY":
+            field_name = "net_quantity"
+        elif category == "DATE":
+            field_name = "manufacturing_date"
+        elif category == "MANUFACTURER":
+            field_name = "manufacturer_details"
+        elif category == "CONSUMER_CARE":
+            field_name = "consumer_care"
+        elif category == "ORIGIN":
+            field_name = "country_of_origin"
+
+        records.append({
+            "rule_code": rule_code,
+            "rule_number": rule_num,
+            "rule_name": rule_name,
+            "description": requirement,
+            "requirement": requirement,
+            "category": category,
+            "field_name": field_name,
+            "condition_type": condition_type,
+            "expected_value": expected,
+            "operator": "exists",
+            "severity": severity,
+            "mandatory": True,
+            "active": active_status,
+            "applicability": applicability,
+            "expected_condition": expected,
+            "evidence_required": evidence_needed,
+            "automation_type": automation_type,
+            "legal_act": "Legal Metrology (Packaged Commodities) Rules, 2011",
+            "statutory_reference": rule_ref,
+            "status": rule_status,
+            "extraction_confidence": "HIGH",
+            "is_deleted": False,
+        })
+
+    return records

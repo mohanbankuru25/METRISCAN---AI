@@ -57,159 +57,104 @@ class ComplianceEngine:
         )
 
         # --------------------------------------------------------------
-        # Rules 2-34
+        # Load approved + enabled compliance rules (Single Source of Truth: Supabase)
         # --------------------------------------------------------------
+        if dynamic_rules is None:
+            try:
+                from .supabase_service import SupabaseService
+                all_active = SupabaseService.get_active_compliance_rules()
+            except Exception as e:
+                print(f"Notice: Supabase active rules fetch warning: {e}")
+                all_active = []
+        else:
+            all_active = dynamic_rules
 
-        results.append(
-            self._evaluate_rule_02(
-                applicability_rules.get("LM-02")
-            )
-        )
+        # Fallback only when Supabase is completely unreachable or empty
+        if not all_active:
+            try:
+                from .compliance_rules import RULE_MASTER
+                all_active = [
+                    {
+                        "rule_code": r["rule_id"],
+                        "rule_number": r["rule_number"],
+                        "rule_name": r["rule_name"],
+                        "status": "APPROVED",
+                        "active": True,
+                    }
+                    for r in RULE_MASTER if r.get("rule_id") != "LM-05"
+                ]
+            except Exception:
+                all_active = []
 
-        results.append(
-            self._evaluate_rule_03(
-                applicability_rules.get("LM-03")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_04(
-                applicability_rules.get("LM-04")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_05(
-                applicability_rules.get("LM-05")
-            )
-        )
-
-        # Rule 6 is expanded into individual declaration checks.
-        results.extend(
-            self._evaluate_rule_06(
-                applicability_rules.get("LM-06"),
-                product_data,
-                ocr_results,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_07(
-                applicability_rules.get("LM-07"),
-                visual_analysis,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_08(
-                applicability_rules.get("LM-08"),
-                visual_analysis,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_09(
-                applicability_rules.get("LM-09"),
-                visual_analysis,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_10(
-                applicability_rules.get("LM-10"),
-                product_data,
-                ocr_results,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_11(
-                applicability_rules.get("LM-11"),
-                product_data,
-                ocr_results,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_12(
-                applicability_rules.get("LM-12"),
-                product_data,
-                ocr_results,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_13(
-                applicability_rules.get("LM-13"),
-                product_data,
-                ocr_results,
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_14(
-                applicability_rules.get("LM-14")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_15(
-                applicability_rules.get("LM-15")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_16(
-                applicability_rules.get("LM-16")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_17(
-                applicability_rules.get("LM-17")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_18(
-                applicability_rules.get("LM-18")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_23(
-                applicability_rules.get("LM-23")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_24(
-                applicability_rules.get("LM-24")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_25(
-                applicability_rules.get("LM-25")
-            )
-        )
-
-        results.append(
-            self._evaluate_rule_26(
-                applicability_rules.get("LM-26")
-            )
-        )
+        # Filter strictly for approved and active rules, deduplicated by rule_code
+        seen_codes = set()
+        deduped_active = []
+        for r in all_active:
+            code = r.get("rule_code") or r.get("rule_id")
+            if code and code not in seen_codes:
+                if r.get("active", True) and not r.get("is_deleted", False) and r.get("status") in ("APPROVED", "ACTIVE", None):
+                    seen_codes.add(code)
+                    deduped_active.append(r)
+        all_active = deduped_active
 
         # --------------------------------------------------------------
-        # Dynamic Compliance Rules (from Supabase)
+        # ONE-TO-ONE RULE EVALUATION
+        # For every active rule loaded from Supabase:
+        # Create exactly ONE evaluation result for that rule.
         # --------------------------------------------------------------
-        dynamic_results = self._evaluate_dynamic_rules(
-            dynamic_rules,
-            product_data,
-            ocr_results,
-            visual_analysis
-        )
-        results.extend(dynamic_results)
+        for active_rule in all_active:
+            code = active_rule.get("rule_code") or active_rule.get("rule_id") or ""
+            eval_item = self._evaluate_rule_by_code(
+                rule_code=code,
+                applicability_rules=applicability_rules,
+                product_data=product_data,
+                ocr_results=ocr_results,
+                visual_analysis=visual_analysis,
+            )
+            if eval_item is None:
+                # Custom dynamic rule created by Admin
+                dyn_res = self._evaluate_dynamic_rules(
+                    [active_rule],
+                    product_data,
+                    ocr_results,
+                    visual_analysis,
+                )
+                if dyn_res:
+                    eval_item = dyn_res[0]
+                else:
+                    eval_item = self._result(
+                        rule_id=code,
+                        rule_number=active_rule.get("rule_number", code),
+                        rule_name=active_rule.get("rule_name", f"Rule {code}"),
+                        status="REVIEW",
+                        reason="Custom rule evaluated without explicit condition trigger.",
+                    )
+
+            # Enforce persistent rule identifiers matching Supabase source of truth
+            eval_item["rule_code"] = code
+            if active_rule.get("id"):
+                eval_item["db_id"] = active_rule["id"]
+            if active_rule.get("rule_name"):
+                eval_item["rule_name"] = active_rule["rule_name"]
+
+            results.append(eval_item)
+
+        # --------------------------------------------------------------
+        # RULE CONSISTENCY VALIDATION
+        # active_rule_count must strictly equal unique_evaluated_rule_count
+        # --------------------------------------------------------------
+        active_codes = [r.get("rule_code") or r.get("rule_id") for r in all_active]
+        evaluated_codes = [r.get("rule_id") for r in results]
+        if len(active_codes) != len(evaluated_codes) or set(active_codes) != set(evaluated_codes):
+            import logging
+            logger = logging.getLogger("compliance_engine")
+            missing = set(active_codes) - set(evaluated_codes)
+            extra = set(evaluated_codes) - set(active_codes)
+            logger.error(
+                f"[RULE CONSISTENCY MISMATCH] Active rules in Supabase ({len(active_codes)}) != "
+                f"Evaluated rules ({len(evaluated_codes)}).\n"
+                f"  Missing: {sorted(list(missing))}, Extra: {sorted(list(extra))}"
+            )
 
         # --------------------------------------------------------------
         # Summary
@@ -344,6 +289,23 @@ class ComplianceEngine:
             "source": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended",
             "weight": weight,
         }
+
+    # ==================================================================
+    # RULE 1
+    # ==================================================================
+
+    def _evaluate_rule_01(self, applicability):
+
+        return self._result(
+            "LM-01",
+            "1",
+            "Short title and commencement",
+            "OUT_OF_SCOPE",
+            applicable=False,
+            expected="Legal Metrology (Packaged Commodities) Rules, 2011 baseline.",
+            reason="Short title and commencement provision; general statutory framework, not an on-package declaration requirement.",
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 1",
+        )
 
     # ==================================================================
     # RULE 2
@@ -1137,6 +1099,87 @@ class ComplianceEngine:
         return None
 
     # ==================================================================
+    # RULE 6 CONSOLIDATED EVALUATION (SINGLE MASTER RECORD FOR LM-06)
+    # ==================================================================
+
+    def _evaluate_rule_06_consolidated(
+        self,
+        applicability,
+        product_data,
+        ocr_results,
+    ) -> Dict[str, Any]:
+        """
+        Consolidates Rule 6 declarations into exactly ONE compliance evaluation record for LM-06.
+        All 10 sub-declaration checks (6(1)(a) through 6(11)) are evaluated and preserved in evidence/details.
+        """
+        sub_results = self._evaluate_rule_06(applicability, product_data, ocr_results)
+
+        # Determine overall status for Rule 6
+        statuses = [str(r.get("status", "")).upper() for r in sub_results]
+        if any(s == "FAIL" for s in statuses):
+            overall_status = "FAIL"
+        elif any(s == "REVIEW" for s in statuses):
+            overall_status = "REVIEW"
+        elif all(s == "PASS" for s in statuses if s not in ("NOT_APPLICABLE", "OUT_OF_SCOPE")):
+            overall_status = "PASS"
+        elif all(s in ("NOT_APPLICABLE", "OUT_OF_SCOPE") for s in statuses):
+            overall_status = "NOT_APPLICABLE"
+        else:
+            overall_status = "REVIEW"
+
+        # Collect evidence from all sub-declarations
+        all_evidence = []
+        for r in sub_results:
+            ev = r.get("evidence")
+            if isinstance(ev, list):
+                all_evidence.extend(ev)
+            elif ev:
+                all_evidence.append(ev)
+
+        pass_count = sum(1 for s in statuses if s == "PASS")
+        review_count = sum(1 for s in statuses if s == "REVIEW")
+        fail_count = sum(1 for s in statuses if s == "FAIL")
+        na_count = sum(1 for s in statuses if s in ("NOT_APPLICABLE", "OUT_OF_SCOPE"))
+
+        reason_parts = []
+        if pass_count > 0:
+            reason_parts.append(f"{pass_count} satisfied")
+        if review_count > 0:
+            reason_parts.append(f"{review_count} require verification")
+        if fail_count > 0:
+            reason_parts.append(f"{fail_count} non-compliant")
+        if na_count > 0:
+            reason_parts.append(f"{na_count} not applicable")
+        reason = "Statutory declarations evaluated: " + (", ".join(reason_parts) if reason_parts else "all checked") + "."
+
+        extracted_declarations = {
+            "manufacturer_or_packer": product_data.get("manufacturer_or_packer"),
+            "country_of_origin": product_data.get("country_of_origin"),
+            "product_name": product_data.get("product_name"),
+            "net_quantity": product_data.get("net_quantity"),
+            "date_of_manufacture": product_data.get("date_of_manufacture"),
+            "best_before": product_data.get("best_before"),
+            "mrp": product_data.get("mrp"),
+            "consumer_contact": product_data.get("consumer_contact"),
+        }
+
+        res = self._result(
+            rule_id="LM-06",
+            rule_number="6",
+            rule_name="Declarations to be made on every package",
+            status=overall_status,
+            applicable=True if overall_status not in ("NOT_APPLICABLE", "OUT_OF_SCOPE") else False,
+            expected="Package shall bear all applicable mandatory declarations under Rule 6.",
+            extracted=extracted_declarations,
+            evidence=all_evidence,
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 6",
+            weight=1.0,
+        )
+        res["declaration_evaluations"] = sub_results
+        return res
+
+    # ==================================================================
     # RULE 7
     # ==================================================================
 
@@ -1722,6 +1765,272 @@ class ComplianceEngine:
             "Exemptions",
             "Any applicable exemption must be determined from package type and legal conditions.",
         )
+
+    # ==================================================================
+    # RULES 19-22 (Premises Physical Inspection & MPE)
+    # ==================================================================
+
+    def _evaluate_rule_19(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Physical inspection at manufacturer or packer premises requires physical sampling and statistical verification, not package imagery."
+        )
+        return self._result(
+            rule_id="LM-19",
+            rule_number="19",
+            rule_name="Inspection of quantity and error at manufacturer or packer premises",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Inspection of quantity and error at manufacturer/packer premises under the Third Schedule.",
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 19",
+        )
+
+    def _evaluate_rule_20(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Administrative enforcement action based on premises inspection results; not an on-package declaration requirement."
+        )
+        return self._result(
+            rule_id="LM-20",
+            rule_number="20",
+            rule_name="Action based on inspection results",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Action on non-compliant lots at manufacturer premises.",
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 20",
+        )
+
+    def _evaluate_rule_21(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Dealer premises physical quantity inspection requires field testing and physical measurement."
+        )
+        return self._result(
+            rule_id="LM-21",
+            rule_number="21",
+            rule_name="Inspection of quantity at wholesale or retail dealer premises",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Testing of net quantity at dealer premises.",
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 21",
+        )
+
+    def _evaluate_rule_22(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Maximum permissible error (MPE) verification requires physical measurement on a statistically drawn sample."
+        )
+        return self._result(
+            rule_id="LM-22",
+            rule_number="22",
+            rule_name="Maximum permissible error",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Net quantity within Maximum Permissible Error prescribed under the First Schedule.",
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 22",
+        )
+
+    # ==================================================================
+    # RULES 27-30 (Registration Provisions)
+    # ==================================================================
+
+    def _evaluate_rule_27(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Registration of manufacturer/packer/importer is an administrative record verification with the Controller/Director."
+        )
+        return self._result(
+            rule_id="LM-27",
+            rule_number="27",
+            rule_name="Registration of manufacturers, packers and importers",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Registration with the Director or Controller.",
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 27",
+        )
+
+    def _evaluate_rule_28(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Verification of registered shorter address requires reference to Directorate registration records."
+        )
+        return self._result(
+            rule_id="LM-28",
+            rule_number="28",
+            rule_name="Registration of shorter address",
+            status="REVIEW",
+            applicable=False,
+            expected="Shorter address registered with the Controller/Director where applicable.",
+            reason=reason,
+            suggestion="Verify whether the manufacturer has registered a shorter address under Rule 28.",
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 28",
+        )
+
+    def _evaluate_rule_29(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Administrative records maintained by the Controller or Director; not an on-package declaration."
+        )
+        return self._result(
+            rule_id="LM-29",
+            rule_number="29",
+            rule_name="Registration records of manufacturers and packers",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Maintenance of registration records by the Controller or Director.",
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 29",
+        )
+
+    def _evaluate_rule_30(self, applicability):
+        reason = (
+            applicability.get("reason")
+            if isinstance(applicability, dict) and applicability.get("reason")
+            else "Administrative compilation and circulation of manufacturer lists by the Central Government."
+        )
+        return self._result(
+            rule_id="LM-30",
+            rule_number="30",
+            rule_name="Compilation and circulation of registered manufacturer lists",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Circulation of registered entities list by the Central Government.",
+            reason=reason,
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 30",
+        )
+
+    # ==================================================================
+    # RULE 31 (Advertisements)
+    # ==================================================================
+
+    def _evaluate_rule_31(self, applicability):
+        if self._is_not_applicable(applicability):
+            return self._result(
+                rule_id="LM-31",
+                rule_number="31",
+                rule_name="Declarations in advertisements mentioning retail sale price",
+                status="NOT_APPLICABLE",
+                applicable=False,
+                expected="Advertisement mentioning retail price must declare net quantity and unit sale price.",
+                reason="Current scanned item is a package image, not a print or digital advertisement mentioning retail sale price.",
+                rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 31",
+            )
+        return self._result(
+            rule_id="LM-31",
+            rule_number="31",
+            rule_name="Declarations in advertisements mentioning retail sale price",
+            status="PASS",
+            expected="Advertisement declarations should comply with net quantity and unit sale price requirements.",
+            reason="Advertisement context verified.",
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 31",
+        )
+
+    # ==================================================================
+    # RULES 32-34 (Enforcement, Relaxation, Repeal)
+    # ==================================================================
+
+    def _evaluate_rule_32(self, applicability):
+        return self._result(
+            rule_id="LM-32",
+            rule_number="32",
+            rule_name="Fine for contravention of rules",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Penal provisions under Section 29/39 of the Act.",
+            reason="Penal provision for contravention under the Act; applies post-adjudication, not an on-package declaration.",
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 32",
+        )
+
+    def _evaluate_rule_33(self, applicability):
+        return self._result(
+            rule_id="LM-33",
+            rule_number="33",
+            rule_name="Power to relax",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Administrative power of Central Government to relax rules in public interest.",
+            reason="Central Government administrative power to relax rules in the public interest.",
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 33",
+        )
+
+    def _evaluate_rule_34(self, applicability):
+        return self._result(
+            rule_id="LM-34",
+            rule_number="34",
+            rule_name="Repeal and savings",
+            status="OUT_OF_SCOPE",
+            applicable=False,
+            expected="Repeal of Standards of Weights and Measures (Packaged Commodities) Rules, 1977.",
+            reason="Statutory transition provision repealing the Standards of Weights and Measures (Packaged Commodities) Rules, 1977.",
+            rule_reference="Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 34",
+        )
+
+    # ==================================================================
+    # RULE EVALUATOR DISPATCH TABLE
+    # ==================================================================
+
+    def _evaluate_rule_by_code(
+        self,
+        rule_code: str,
+        applicability_rules: Dict[str, Any],
+        product_data: Dict[str, Any],
+        ocr_results: List[Any],
+        visual_analysis: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        app_rule = applicability_rules.get(rule_code)
+
+        dispatch_table = {
+            "LM-01": lambda: self._evaluate_rule_01(app_rule),
+            "LM-02": lambda: self._evaluate_rule_02(app_rule),
+            "LM-03": lambda: self._evaluate_rule_03(app_rule),
+            "LM-04": lambda: self._evaluate_rule_04(app_rule),
+            "LM-05": lambda: self._evaluate_rule_05(app_rule),
+            "LM-06": lambda: self._evaluate_rule_06_consolidated(app_rule, product_data, ocr_results),
+            "LM-07": lambda: self._evaluate_rule_07(app_rule, visual_analysis),
+            "LM-08": lambda: self._evaluate_rule_08(app_rule, visual_analysis),
+            "LM-09": lambda: self._evaluate_rule_09(app_rule, visual_analysis),
+            "LM-10": lambda: self._evaluate_rule_10(app_rule, product_data, ocr_results),
+            "LM-11": lambda: self._evaluate_rule_11(app_rule, product_data, ocr_results),
+            "LM-12": lambda: self._evaluate_rule_12(app_rule, product_data, ocr_results),
+            "LM-13": lambda: self._evaluate_rule_13(app_rule, product_data, ocr_results),
+            "LM-14": lambda: self._evaluate_rule_14(app_rule),
+            "LM-15": lambda: self._evaluate_rule_15(app_rule),
+            "LM-16": lambda: self._evaluate_rule_16(app_rule),
+            "LM-17": lambda: self._evaluate_rule_17(app_rule),
+            "LM-18": lambda: self._evaluate_rule_18(app_rule),
+            "LM-19": lambda: self._evaluate_rule_19(app_rule),
+            "LM-20": lambda: self._evaluate_rule_20(app_rule),
+            "LM-21": lambda: self._evaluate_rule_21(app_rule),
+            "LM-22": lambda: self._evaluate_rule_22(app_rule),
+            "LM-23": lambda: self._evaluate_rule_23(app_rule),
+            "LM-24": lambda: self._evaluate_rule_24(app_rule),
+            "LM-25": lambda: self._evaluate_rule_25(app_rule),
+            "LM-26": lambda: self._evaluate_rule_26(app_rule),
+            "LM-27": lambda: self._evaluate_rule_27(app_rule),
+            "LM-28": lambda: self._evaluate_rule_28(app_rule),
+            "LM-29": lambda: self._evaluate_rule_29(app_rule),
+            "LM-30": lambda: self._evaluate_rule_30(app_rule),
+            "LM-31": lambda: self._evaluate_rule_31(app_rule),
+            "LM-32": lambda: self._evaluate_rule_32(app_rule),
+            "LM-33": lambda: self._evaluate_rule_33(app_rule),
+            "LM-34": lambda: self._evaluate_rule_34(app_rule),
+        }
+
+        if rule_code in dispatch_table:
+            return dispatch_table[rule_code]()
+        return None
 
     # ==================================================================
     # GENERIC CONDITIONAL RULE

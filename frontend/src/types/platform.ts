@@ -37,19 +37,35 @@ export interface ComplianceRule {
   id: string;
   rule_code: string;
   rule_name: string;
+  rule_number?: string | null;
   title?: string;
   description?: string | null;
+  requirement?: string | null;
   category?: string | null;
   field_name?: string | null;
   condition_type: string;
   expected_value?: string | null;
+  expected_condition?: string | null;
   operator?: string | null;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "MANDATORY" | "WARNING" | "OPTIONAL" | string;
   mandatory: boolean;
   active: boolean;
   is_active?: boolean;
+  is_enabled?: boolean;
+  applicability?: string | null;
+  evidence_required?: string[] | null;
+  automation_type?: "AUTOMATED" | "CONDITIONAL" | "PARTIAL" | "LISTING" | "OUT_OF_SCOPE" | string;
   legal_act?: string;
+  statutory_reference?: string | null;
   penalty_clause?: string;
+  source_document_id?: string | null;
+  source_document_name?: string | null;
+  source_page?: number | null;
+  extraction_confidence?: "HIGH" | "MEDIUM" | "LOW" | string;
+  status?: "DRAFT" | "APPROVED" | "REJECTED" | "DELETED" | "OMITTED" | string;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  is_deleted?: boolean;
   effective_from?: string | null;
   effective_to?: string | null;
   created_by?: string | null;
@@ -184,3 +200,36 @@ export interface ReportItem {
     username?: string;
   } | null;
 }
+
+export interface RuleRequest {
+  id: string;
+  inspector_id: string;
+  rule_id?: string | null;
+  rule_code?: string | null;
+  request_type: string;
+  subject: string;
+  description: string;
+  evidence_url?: string | null;
+  status: "PENDING" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED";
+  admin_response?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+  profiles?: {
+    id?: string;
+    full_name?: string;
+    email?: string;
+    role?: string;
+    designation?: string;
+    username?: string;
+  } | null;
+  compliance_rules?: {
+    id?: string;
+    rule_code?: string;
+    rule_name?: string;
+    title?: string;
+    category?: string;
+  } | null;
+}
+

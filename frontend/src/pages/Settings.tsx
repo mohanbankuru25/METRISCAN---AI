@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { PageContainer } from "../components/layout/PageContainer";
 import { authService } from "../services/authService";
 import type { UserProfile } from "../types/platform";
@@ -12,7 +13,10 @@ import {
 } from "lucide-react";
 
 export function Settings() {
+  const location = useLocation();
   const [user, setUser] = useState<UserProfile | null>(null);
+
+  const isAdmin = location.pathname.startsWith("/admin");
 
   useEffect(() => {
     async function loadMe() {
@@ -73,7 +77,7 @@ export function Settings() {
               </div>
 
               <div style={{ padding: "0.85rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>Officer Username</div>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>Legal Metrology Inspector Username</div>
                 <div style={{ fontSize: "1rem", fontWeight: 800, color: "#1e3a8a", marginTop: "0.25rem", fontFamily: "var(--font-mono)" }}>
                   {user.username}
                 </div>
@@ -150,51 +154,53 @@ export function Settings() {
           </div>
         </div>
 
-        {/* System & Architecture Info */}
-        <div className="panel-card" style={{ padding: "1.5rem" }}>
-          <div className="panel-card-header" style={{ marginBottom: "1rem" }}>
-            <div className="panel-card-title">
-              <Server size={18} color="#1e3a8a" />
-              <span>Backend &amp; Statutory Engine Architecture</span>
+        {/* System & Architecture Info (Admin Central Oversight Only) */}
+        {isAdmin && (
+          <div className="panel-card" style={{ padding: "1.5rem" }}>
+            <div className="panel-card-header" style={{ marginBottom: "1rem" }}>
+              <div className="panel-card-title">
+                <Server size={18} color="#1e3a8a" />
+                <span>Backend &amp; Statutory Engine Architecture</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.75rem", color: "#15803d", fontWeight: 700 }}>
+                <Database size={14} />
+                <span>Supabase Cloud PostgreSQL Active</span>
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.75rem", color: "#15803d", fontWeight: 700 }}>
-              <Database size={14} />
-              <span>Supabase Cloud PostgreSQL Active</span>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.875rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                <span style={{ color: "#64748b" }}>Primary Database:</span>
+                <span style={{ fontWeight: 700, color: "#0f172a" }}>Supabase PostgreSQL (Single Source of Truth)</span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                <span style={{ color: "#64748b" }}>Evidence Storage Buckets:</span>
+                <span style={{ fontWeight: 700, color: "#1e3a8a", fontFamily: "var(--font-mono)" }}>inspection-images / inspection-reports</span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                <span style={{ color: "#64748b" }}>OCR Recognition Engine:</span>
+                <span style={{ fontWeight: 700, color: "#0f172a" }}>PaddleOCR (PP-OCRv4 Multi-language Model)</span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                <span style={{ color: "#64748b" }}>Vision AI Model:</span>
+                <span style={{ fontWeight: 700, color: "#0f172a" }}>Gemini Vision AI (with dynamic heuristic fallback)</span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                <span style={{ color: "#64748b" }}>Statutory Rules Engine:</span>
+                <span style={{ fontWeight: 700, color: "#0f172a" }}>Dynamic Rule Engine (Configured in Supabase)</span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "#64748b" }}>Audit Integrity:</span>
+                <span style={{ fontWeight: 700, color: "#15803d" }}>Tamper-Evident Immutable Audit Log</span>
+              </div>
             </div>
           </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.875rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
-              <span style={{ color: "#64748b" }}>Primary Database:</span>
-              <span style={{ fontWeight: 700, color: "#0f172a" }}>Supabase PostgreSQL (Single Source of Truth)</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
-              <span style={{ color: "#64748b" }}>Evidence Storage Buckets:</span>
-              <span style={{ fontWeight: 700, color: "#1e3a8a", fontFamily: "var(--font-mono)" }}>inspection-images / inspection-reports</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
-              <span style={{ color: "#64748b" }}>OCR Recognition Engine:</span>
-              <span style={{ fontWeight: 700, color: "#0f172a" }}>PaddleOCR (PP-OCRv4 Multi-language Model)</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
-              <span style={{ color: "#64748b" }}>Vision AI Model:</span>
-              <span style={{ fontWeight: 700, color: "#0f172a" }}>Gemini Vision AI (with dynamic heuristic fallback)</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
-              <span style={{ color: "#64748b" }}>Statutory Rules Engine:</span>
-              <span style={{ fontWeight: 700, color: "#0f172a" }}>Dynamic Rule Engine (Configured in Supabase)</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#64748b" }}>Audit Integrity:</span>
-              <span style={{ fontWeight: 700, color: "#15803d" }}>Tamper-Evident Immutable Audit Log</span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </PageContainer>
   );

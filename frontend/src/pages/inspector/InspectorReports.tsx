@@ -5,9 +5,11 @@ import { historyService } from "../../services/historyService";
 import { downloadReportPdf, downloadReportDocx, downloadStoredReport, viewReportPdf } from "../../services/reportService";
 import type { ScanHistoryItem } from "../../types/history";
 import { FileText, Download, Eye, Loader2, Scale, ArrowLeft, AlertCircle } from "lucide-react";
+import { useLanguage } from "../../i18n";
 
 export function InspectorReports() {
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [scans, setScans] = useState<ScanHistoryItem[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadType, setDownloadType] = useState<"PDF" | "DOCX" | null>(null);
@@ -31,7 +33,7 @@ export function InspectorReports() {
     setErrorMsg(null);
 
     try {
-      await downloadStoredReport(scan.id, format.toLowerCase() as "pdf" | "docx");
+      await downloadStoredReport(scan.id, format.toLowerCase() as "pdf" | "docx", undefined, language);
     } catch (err: any) {
       console.warn("Direct storage download notice, trying generation fallback:", err);
       try {
@@ -47,11 +49,12 @@ export function InspectorReports() {
           ocr_data: scan.fullData,
           compliance_result: scan.fullData?.compliance,
           inspection_date: scan.timestamp,
+          language: language,
         };
         if (format === "PDF") {
-          await downloadReportPdf(payload, `Inspection_Report_${safeName}.pdf`);
+          await downloadReportPdf(payload, `Inspection_Report_${safeName}_${language}.pdf`, language);
         } else {
-          await downloadReportDocx(payload, `Inspection_Report_${safeName}.docx`);
+          await downloadReportDocx(payload, `Inspection_Report_${safeName}_${language}.docx`, language);
         }
       } catch (fallbackErr: any) {
         setErrorMsg(fallbackErr.message || "Failed to download report. Ensure backend server is running.");
@@ -182,7 +185,7 @@ export function InspectorReports() {
                             <button
                               onClick={async () => {
                                 try {
-                                  await viewReportPdf(scan.id);
+                                  await viewReportPdf(scan.id, language);
                                 } catch (err: any) {
                                   alert("Failed to open report PDF: " + (err?.message || "File error"));
                                 }

@@ -19,7 +19,8 @@ import {
   Shield,
   ShieldAlert,
   FileSpreadsheet,
-  Layers
+  Layers,
+  Bell
 } from "lucide-react";
 import { checkBackendHealth } from "../../services/api";
 import { authService } from "../../services/authService";
@@ -74,6 +75,7 @@ export function Sidebar() {
     { to: "/inspector/multi-scan", label: t("officer.multiScan", "Multi-Scan Products"), icon: Layers },
     { to: "/inspector/history", label: t("officer.inspectionHistory", "Inspection History"), icon: History },
     { to: "/inspector/reports", label: t("officer.reportsDossiers", "Reports & Dossiers"), icon: FileText },
+    { to: "/inspector/rules", label: t("officer.rules", "Rules"), icon: BookOpen },
     { to: "/inspector/settings", label: t("officer.profileSettings", "Profile & Settings"), icon: Settings },
   ];
 
@@ -84,6 +86,7 @@ export function Sidebar() {
     { to: "/admin/user-scan-issues", label: t("officer.citizenScanAlerts", "Citizen Scan Alerts"), icon: ShieldAlert },
     { to: "/admin/user-issues", label: t("officer.citizenGrievances", "Citizen Grievances"), icon: FileSpreadsheet },
     { to: "/admin/rules", label: t("officer.rulesManagement", "Rules Management"), icon: BookOpen },
+    { to: "/admin/notifications", label: t("officer.notifications", "Notifications & Requests"), icon: Bell },
     { to: "/admin/reports", label: t("officer.reports", "Reports"), icon: FileText },
     { to: "/admin/analytics", label: t("officer.analytics", "Analytics"), icon: BarChart3 },
     { to: "/admin/logs", label: t("officer.auditLogs", "Audit Logs"), icon: Activity },

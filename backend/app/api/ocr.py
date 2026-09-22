@@ -364,10 +364,10 @@ async def process_ocr(
 
         if cached_analysis:
             print("\n" + "=" * 70)
-            print("CACHE HIT — RETRIEVING EXISTING ANALYSIS RESULT")
+            print("CACHE HIT — RETRIEVING OCR & VISION ARTIFACTS")
             print("=" * 70)
             print("Image hash:", image_hash)
-            print("Skipping PaddleOCR, Gemini Vision, Applicability, and Compliance pipelines.")
+            print("Recomputing compliance evaluation against live active rules from Supabase...")
 
             is_cache_hit = True
             extracted_text = cached_analysis.get("text", [])
@@ -379,12 +379,19 @@ async def process_ocr(
             product_data = cached_analysis.get("product_data", {})
             recovered_fields = cached_analysis.get("recovered_fields", [])
             applicability_result = cached_analysis.get("applicability", {})
-            compliance_result = cached_analysis.get("compliance", {})
             cached_proc_img = cached_analysis.get("processed_image")
             if cached_proc_img and os.path.exists(cached_proc_img):
                 processed_path = cached_proc_img
             else:
                 processed_path = file_path
+
+            # Recompute compliance against live active rules from Supabase (Single Source of Truth)
+            compliance_result = compliance_engine.evaluate(
+                product_data=product_data,
+                applicability_result=applicability_result,
+                ocr_results=ocr_results,
+                visual_analysis=visual_analysis,
+            )
         else:
 
             print(

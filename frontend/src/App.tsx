@@ -21,6 +21,7 @@ import { Settings } from "./pages/Settings";
 // Inspector Portal
 import { InspectorDashboard } from "./pages/inspector/InspectorDashboard";
 import { InspectorReports } from "./pages/inspector/InspectorReports";
+import { InspectorRules } from "./pages/inspector/InspectorRules";
 
 // Admin Portal
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
@@ -29,6 +30,7 @@ import { AdminInspections } from "./pages/admin/AdminInspections";
 import { AdminAnalytics } from "./pages/admin/AdminAnalytics";
 import { AdminReports } from "./pages/admin/AdminReports";
 import { AdminRules } from "./pages/admin/AdminRules";
+import { AdminNotifications } from "./pages/admin/AdminNotifications";
 import { AdminLogs } from "./pages/admin/AdminLogs";
 import { AdminUserScanIssues } from "./pages/admin/AdminUserScanIssues";
 import { AdminUserIssues } from "./pages/admin/AdminUserIssues";
@@ -148,6 +150,11 @@ function App() {
           />
 
           <Route
+            path="/inspector/rules"
+            element={<InspectorRules />}
+          />
+
+          <Route
             path="/inspector/settings"
             element={<Settings />}
           />
@@ -203,6 +210,11 @@ function App() {
           <Route
             path="/admin/rules"
             element={<AdminRules />}
+          />
+
+          <Route
+            path="/admin/notifications"
+            element={<AdminNotifications />}
           />
 
           <Route

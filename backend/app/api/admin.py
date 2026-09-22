@@ -46,16 +46,31 @@ class StatusUpdateRequest(BaseModel):
 
 class RuleCreateRequest(BaseModel):
     rule_code: str
-    rule_name: str
+    rule_name: Optional[str] = None
+    title: Optional[str] = None
+    rule_number: Optional[str] = None
     description: Optional[str] = None
+    requirement: Optional[str] = None
     category: Optional[str] = "GENERAL"
     field_name: Optional[str] = None
     condition_type: str = "field_presence"
     expected_value: Optional[str] = None
+    expected_condition: Optional[str] = None
     operator: Optional[str] = "exists"
     severity: str = "MEDIUM"
     mandatory: bool = True
-    active: bool = True
+    active: Optional[bool] = None
+    is_active: Optional[bool] = None
+    penalty_clause: Optional[str] = None
+    applicability: Optional[str] = None
+    evidence_required: Optional[List[str]] = None
+    automation_type: Optional[str] = "AUTOMATED"
+    legal_act: Optional[str] = "Legal Metrology (Packaged Commodities) Rules, 2011"
+    statutory_reference: Optional[str] = None
+    source_document_id: Optional[str] = None
+    source_document_name: Optional[str] = None
+    source_page: Optional[int] = None
+    status: Optional[str] = "APPROVED"
     effective_from: Optional[str] = None
     effective_to: Optional[str] = None
 
@@ -66,15 +81,30 @@ class RuleBatchCreateRequest(BaseModel):
 
 class RuleUpdateRequest(BaseModel):
     rule_name: Optional[str] = None
+    title: Optional[str] = None
+    rule_number: Optional[str] = None
     description: Optional[str] = None
+    requirement: Optional[str] = None
     category: Optional[str] = None
     field_name: Optional[str] = None
     condition_type: Optional[str] = None
     expected_value: Optional[str] = None
+    expected_condition: Optional[str] = None
     operator: Optional[str] = None
     severity: Optional[str] = None
     mandatory: Optional[bool] = None
     active: Optional[bool] = None
+    is_active: Optional[bool] = None
+    penalty_clause: Optional[str] = None
+    applicability: Optional[str] = None
+    evidence_required: Optional[List[str]] = None
+    automation_type: Optional[str] = None
+    legal_act: Optional[str] = None
+    statutory_reference: Optional[str] = None
+    source_document_id: Optional[str] = None
+    source_document_name: Optional[str] = None
+    source_page: Optional[int] = None
+    status: Optional[str] = None
     effective_from: Optional[str] = None
     effective_to: Optional[str] = None
 
@@ -314,6 +344,7 @@ def list_rules(
     authorization: Optional[str] = Header(None),
     search: Optional[str] = Query(default=None),
     category: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
     active: Optional[bool] = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -325,6 +356,7 @@ def list_rules(
             search=search,
             category=category,
             active=active,
+            status=status,
             limit=limit,
             offset=offset,
         )
@@ -367,8 +399,24 @@ def create_rule(
 ):
     admin = require_admin(authorization)
 
-    payload = request.dict()
+    payload = request.dict(exclude_unset=True)
     payload["created_by"] = admin.get("id")
+
+    rule_title = payload.get("title") or payload.get("rule_name") or payload.get("rule_code")
+    payload["rule_name"] = rule_title
+    payload["title"] = rule_title
+
+    rule_desc = payload.get("description") or payload.get("requirement") or ""
+    payload["description"] = rule_desc
+    payload["requirement"] = rule_desc
+
+    if "is_active" in payload and payload.get("active") is None:
+        payload["active"] = payload["is_active"]
+    elif "active" in payload and payload.get("is_active") is None:
+        payload["is_active"] = payload["active"]
+    elif "active" not in payload and "is_active" not in payload:
+        payload["active"] = True
+        payload["is_active"] = True
 
     try:
         new_rule = SupabaseService.create_rule(payload)
@@ -379,7 +427,7 @@ def create_rule(
                 action="CREATE_RULE",
                 entity_type="compliance_rule",
                 entity_id=new_rule.get("id"),
-                description=f"Created compliance rule {request.rule_code} - {request.rule_name}",
+                description=f"Created compliance rule {request.rule_code} - {rule_title}",
                 metadata={"rule_code": request.rule_code, "category": request.category},
             )
         except Exception:
@@ -405,10 +453,26 @@ def update_rule(
 ):
     admin = require_admin(authorization)
 
+    payload = request.dict(exclude_unset=True)
+    if "title" in payload and not payload.get("rule_name"):
+        payload["rule_name"] = payload["title"]
+    elif "rule_name" in payload and not payload.get("title"):
+        payload["title"] = payload["rule_name"]
+
+    if "requirement" in payload and not payload.get("description"):
+        payload["description"] = payload["requirement"]
+    elif "description" in payload and not payload.get("requirement"):
+        payload["requirement"] = payload["description"]
+
+    if "is_active" in payload and "active" not in payload:
+        payload["active"] = payload["is_active"]
+    elif "active" in payload and "is_active" not in payload:
+        payload["is_active"] = payload["active"]
+
     try:
         updated = SupabaseService.update_rule(
             rule_id=rule_id,
-            data=request.dict(exclude_unset=True),
+            data=payload,
         )
 
         try:
@@ -432,6 +496,117 @@ def update_rule(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to update compliance rule: {str(exc)}",
+        )
+
+
+@router.post("/rules/{rule_id}/approve")
+def approve_rule(
+    rule_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    admin = require_admin(authorization)
+
+    try:
+        approved = SupabaseService.approve_rule(
+            rule_id=rule_id,
+            admin_id=admin.get("id"),
+        )
+
+        try:
+            SupabaseService.create_audit_log(
+                user_id=admin.get("id"),
+                action="APPROVE_RULE",
+                entity_type="compliance_rule",
+                entity_id=rule_id,
+                description=f"Approved compliance rule {approved.get('rule_code')} into active compliance engine",
+                metadata={"rule_code": approved.get("rule_code"), "rule_name": approved.get("rule_name")},
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"Compliance rule {approved.get('rule_code')} approved and activated",
+            "rule": approved,
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to approve compliance rule: {str(exc)}",
+        )
+
+
+@router.post("/rules/{rule_id}/reject")
+def reject_rule(
+    rule_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    admin = require_admin(authorization)
+
+    try:
+        rejected = SupabaseService.reject_rule(
+            rule_id=rule_id,
+            admin_id=admin.get("id"),
+        )
+
+        try:
+            SupabaseService.create_audit_log(
+                user_id=admin.get("id"),
+                action="REJECT_RULE",
+                entity_type="compliance_rule",
+                entity_id=rule_id,
+                description=f"Rejected draft candidate rule {rejected.get('rule_code')}",
+                metadata={"rule_code": rejected.get("rule_code")},
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"Draft rule {rejected.get('rule_code')} rejected",
+            "rule": rejected,
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reject candidate rule: {str(exc)}",
+        )
+
+
+@router.delete("/rules/{rule_id}")
+def delete_rule(
+    rule_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    admin = require_admin(authorization)
+
+    try:
+        deleted = SupabaseService.delete_rule(
+            rule_id=rule_id,
+            admin_id=admin.get("id"),
+        )
+
+        try:
+            SupabaseService.create_audit_log(
+                user_id=admin.get("id"),
+                action="DELETE_RULE",
+                entity_type="compliance_rule",
+                entity_id=rule_id,
+                description=f"Deactivated compliance rule {deleted.get('rule_code')} from future inspections",
+                metadata={"rule_code": deleted.get("rule_code")},
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": "Compliance rule deactivated. Historical inspection reports remain intact.",
+            "rule": deleted,
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete compliance rule: {str(exc)}",
         )
 
 
@@ -471,6 +646,58 @@ def toggle_rule_status(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to toggle rule status: {str(exc)}",
+        )
+
+
+@router.post("/rules/seed")
+def seed_default_rules(
+    authorization: Optional[str] = Header(None),
+):
+    admin = require_admin(authorization)
+
+    try:
+        result = SupabaseService.seed_initial_rules()
+
+        try:
+            SupabaseService.create_audit_log(
+                user_id=admin.get("id"),
+                action="SEED_BASELINE_RULES",
+                entity_type="compliance_rules",
+                description=f"Seeded {result.get('seeded_count')} baseline statutory rules into Supabase",
+                metadata=result,
+            )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            **result,
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to seed baseline rules: {str(exc)}",
+        )
+
+
+@router.get("/rule-documents")
+def list_rule_documents(
+    authorization: Optional[str] = Header(None),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    require_admin(authorization)
+
+    try:
+        docs = SupabaseService.get_rule_documents(limit=limit)
+        return {
+            "success": True,
+            "data": docs,
+            "total": len(docs),
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch statutory rule documents: {str(exc)}",
         )
 
 
@@ -693,4 +920,66 @@ def update_consumer_issue(
         admin_id=admin.get("id", "admin"),
     )
     return {"success": True, "data": updated}
+
+
+# ============================================================
+# INSPECTOR RULE REQUESTS (ADMIN REVIEW & NOTIFICATIONS)
+# ============================================================
+
+class RuleRequestReviewUpdate(BaseModel):
+    status: str
+    admin_response: Optional[str] = None
+
+
+@router.get("/rule-requests")
+def get_admin_rule_requests(
+    status: Optional[str] = Query(None, description="Filter by status: PENDING, UNDER_REVIEW, RESOLVED, REJECTED, ALL"),
+    limit: int = Query(100, ge=1, le=200),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Fetches all Inspector Rule Requests for Administrator review and notification display.
+    """
+    require_admin(authorization)
+    requests = SupabaseService.get_admin_rule_requests(status=status, limit=limit)
+    return {
+        "success": True,
+        "total": len(requests),
+        "data": requests,
+        "requests": requests,
+    }
+
+
+@router.patch("/rule-requests/{request_id}")
+def review_rule_request(
+    request_id: str,
+    body: RuleRequestReviewUpdate,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Admin reviews, responds to, and updates status of an inspector's rule request.
+    Allowed statuses: UNDER_REVIEW, RESOLVED, REJECTED.
+    """
+    admin = require_admin(authorization)
+    admin_id = admin.get("id")
+
+    try:
+        updated = SupabaseService.update_rule_request(
+            request_id=request_id,
+            status=body.status,
+            admin_response=body.admin_response,
+            admin_id=admin_id,
+        )
+        return {
+            "success": True,
+            "message": f"Rule request marked as {body.status.upper()}",
+            "data": updated,
+            "request": updated,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update rule request: {str(e)}",
+        )
+
 

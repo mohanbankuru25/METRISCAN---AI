@@ -11,10 +11,12 @@ import type { ScanHistoryItem } from "../types/history";
 import type { ComplianceRuleResult } from "../types/compliance";
 import { ArrowLeft, Printer, Download, Calendar, Scale, Cpu, ChevronDown, ChevronUp, FileText, Loader2, Eye } from "lucide-react";
 import { downloadReportPdf, downloadReportDocx, viewReportPdf } from "../services/reportService";
+import { useLanguage } from "../i18n";
 
 export function HistoryDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [scan, setScan] = useState<ScanHistoryItem | null>(null);
   const [selectedRule, setSelectedRule] = useState<ComplianceRuleResult | null>(null);
   const [showTechDetails, setShowTechDetails] = useState<boolean>(false);
@@ -90,7 +92,7 @@ export function HistoryDetail() {
     if (!scan) return;
     try {
       setDownloadingPdf(true);
-      await downloadReportPdf(scan, `Compliance_Report_${scan.id || "inspection"}.pdf`);
+      await downloadReportPdf(scan, `Compliance_Report_${scan.id || "inspection"}_${language}.pdf`, language);
     } catch (err: any) {
       alert(err.message || "Failed to download PDF report");
     } finally {
@@ -102,7 +104,7 @@ export function HistoryDetail() {
     if (!scan) return;
     try {
       setDownloadingDocx(true);
-      await downloadReportDocx(scan, `Compliance_Report_${scan.id || "inspection"}.docx`);
+      await downloadReportDocx(scan, `Compliance_Report_${scan.id || "inspection"}_${language}.docx`, language);
     } catch (err: any) {
       alert(err.message || "Failed to download DOCX report");
     } finally {
@@ -125,7 +127,7 @@ export function HistoryDetail() {
               onClick={async () => {
                 if (!scan) return;
                 try {
-                  await viewReportPdf(scan.id);
+                  await viewReportPdf(scan.id, language);
                 } catch (err: any) {
                   alert(err.message || "Failed to open PDF report.");
                 }

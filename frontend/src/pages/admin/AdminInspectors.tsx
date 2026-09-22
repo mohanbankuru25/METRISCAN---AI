@@ -412,7 +412,7 @@ export function AdminInspectors() {
               <form onSubmit={handleCreateInspector} style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.25rem" }}>
-                    Officer Username (must end in .ins) *
+                    Legel Metrology Inspector Username (must end in .ins) *
                   </label>
                   <input
                     type="text"

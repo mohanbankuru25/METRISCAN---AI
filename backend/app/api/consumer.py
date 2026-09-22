@@ -196,7 +196,7 @@ def get_scan(
 @router.get("/scans/{id}/report/pdf")
 def download_consumer_report_pdf(
     id: str,
-    lang: str = Query("en", description="Language code: en, hi, mr, te"),
+    lang: str = Query("en", description="Language code: en, hi, mr, te, ta, kn"),
     consumer: Dict[str, Any] = Depends(get_current_consumer),
 ):
     """

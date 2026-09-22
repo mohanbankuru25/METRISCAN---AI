@@ -6,6 +6,7 @@ import type {
   AdminAnalytics,
   AuditLog,
   ReportItem,
+  RuleRequest,
 } from "../types/platform";
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -170,11 +171,13 @@ export const adminService = {
     search?: string;
     category?: string;
     active?: boolean;
+    status?: string;
   }): Promise<ComplianceRule[]> {
     const query = new URLSearchParams();
     if (params?.search) query.set("search", params.search);
     if (params?.category) query.set("category", params.category);
     if (params?.active !== undefined) query.set("active", String(params.active));
+    if (params?.status && params.status !== "ALL") query.set("status", params.status);
 
     const res = await fetch(`${BACKEND_URL}/api/admin/rules?${query.toString()}`, {
       headers: authService.getAuthHeaders(),
@@ -210,7 +213,12 @@ export const adminService = {
 
     const json = await res.json();
     if (!res.ok) {
-      throw new Error(json.detail || "Failed to create compliance rule");
+      const errorMsg = typeof json.detail === "string"
+        ? json.detail
+        : Array.isArray(json.detail)
+          ? json.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
+          : "Failed to create compliance rule";
+      throw new Error(errorMsg);
     }
 
     return json.rule;
@@ -225,7 +233,12 @@ export const adminService = {
 
     const json = await res.json();
     if (!res.ok) {
-      throw new Error(json.detail || "Failed to update compliance rule");
+      const errorMsg = typeof json.detail === "string"
+        ? json.detail
+        : Array.isArray(json.detail)
+          ? json.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
+          : "Failed to update compliance rule";
+      throw new Error(errorMsg);
     }
 
     return json.rule;
@@ -244,6 +257,80 @@ export const adminService = {
     }
 
     return json.rule;
+  },
+
+  async approveRule(id: string): Promise<ComplianceRule> {
+    const res = await fetch(`${BACKEND_URL}/api/admin/rules/${id}/approve`, {
+      method: "POST",
+      headers: authService.getAuthHeaders(),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.detail || "Failed to approve compliance rule");
+    }
+
+    return json.rule;
+  },
+
+  async rejectRule(id: string): Promise<ComplianceRule> {
+    const res = await fetch(`${BACKEND_URL}/api/admin/rules/${id}/reject`, {
+      method: "POST",
+      headers: authService.getAuthHeaders(),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.detail || "Failed to reject compliance rule");
+    }
+
+    return json.rule;
+  },
+
+  async deleteComplianceRule(id: string): Promise<ComplianceRule> {
+    const res = await fetch(`${BACKEND_URL}/api/admin/rules/${id}`, {
+      method: "DELETE",
+      headers: authService.getAuthHeaders(),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.detail || "Failed to deactivate compliance rule");
+    }
+
+    return json.rule;
+  },
+
+  async seedDefaultRules(): Promise<{
+    success: boolean;
+    total_baseline_rules: number;
+    seeded_count: number;
+    skipped_existing_count: number;
+  }> {
+    const res = await fetch(`${BACKEND_URL}/api/admin/rules/seed`, {
+      method: "POST",
+      headers: authService.getAuthHeaders(),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.detail || "Failed to seed default rules");
+    }
+
+    return json;
+  },
+
+  async getRuleDocuments(): Promise<any[]> {
+    const res = await fetch(`${BACKEND_URL}/api/admin/rule-documents`, {
+      headers: authService.getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const json = await res.json();
+    return json.data || [];
   },
 
   // ==========================================================================
@@ -369,5 +456,49 @@ export const adminService = {
     }
 
     return json;
+  },
+
+  // ==========================================================================
+  // INSPECTOR RULE REQUESTS & NOTIFICATIONS
+  // ==========================================================================
+  async getRuleRequests(status?: string): Promise<RuleRequest[]> {
+    const query = status && status !== "ALL" ? `?status=${encodeURIComponent(status)}` : "";
+    const res = await fetch(`${BACKEND_URL}/api/admin/rule-requests${query}`, {
+      headers: authService.getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to fetch rule requests (${res.status})`);
+    }
+
+    const json = await res.json();
+    return json.data || [];
+  },
+
+  async updateRuleRequest(
+    requestId: string,
+    status: string,
+    adminResponse?: string
+  ): Promise<RuleRequest> {
+    const res = await fetch(`${BACKEND_URL}/api/admin/rule-requests/${requestId}`, {
+      method: "PATCH",
+      headers: {
+        ...authService.getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status,
+        admin_response: adminResponse,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to update rule request (${res.status})`);
+    }
+
+    const json = await res.json();
+    return json.data;
   },
 };

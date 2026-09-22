@@ -80,9 +80,10 @@ print("\nPACKAGE CONTEXT")
 print(industrial_result["package_context"])
 
 
-print("\nRULES 3-13")
+import re
 for rule in industrial_result["rules"]:
-    if 3 <= int(rule["rule_number"]) <= 13:
+    m = re.match(r"\d+", str(rule["rule_number"]))
+    if m and 3 <= int(m.group()) <= 13:
         print(
             f'{rule["rule_id"]} | '
             f'{rule["status"]} | '
