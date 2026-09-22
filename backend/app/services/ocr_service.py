@@ -2,16 +2,16 @@ import os
 
 
 # =========================================================
-# PADDLE CPU CONFIGURATION
+# PADDLE CPU / LOW-MEMORY CONFIGURATION
 # =========================================================
 
-# Disable problematic CPU optimizations.
-# These settings are useful for CPU-based PaddleOCR
-# environments such as Hugging Face Spaces.
-
+# Disable CPU optimizations that can increase memory usage.
 os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
 os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["FLAGS_enable_pir_api"] = "0"
+
+# Limit CPU threads for Railway's limited resources.
+os.environ["OMP_NUM_THREADS"] = "1"
 
 
 from paddleocr import PaddleOCR
@@ -25,13 +25,13 @@ class OCRService:
 
     def __init__(self):
 
+        # -------------------------------------------------
         # IMPORTANT:
         # Do NOT initialize PaddleOCR here.
         #
-        # PaddleOCR is heavy and downloads/loads several
-        # models. Lazy initialization prevents the OCR
-        # engine from loading simply because this module
-        # was imported.
+        # PaddleOCR is heavy and downloads/loads models.
+        # Lazy initialization keeps startup lightweight.
+        # -------------------------------------------------
 
         self.ocr = None
 
@@ -41,21 +41,39 @@ class OCRService:
 
     def _get_ocr(self):
 
-        # If PaddleOCR is already initialized,
-        # reuse the same instance.
-
+        # Reuse the existing OCR engine.
         if self.ocr is not None:
             return self.ocr
 
         print("========================================")
         print("[PADDLEOCR] Initializing OCR engine...")
         print("[PADDLEOCR] Device: CPU")
+        print("[PADDLEOCR] Low-memory mode: ENABLED")
         print("========================================")
+
+        # -------------------------------------------------
+        # MEMORY-OPTIMIZED PADDLEOCR
+        # -------------------------------------------------
+        #
+        # Disable:
+        #
+        # 1. Document orientation classification
+        # 2. Document unwarping
+        # 3. Text-line orientation classification
+        #
+        # These additional models consume RAM.
+        #
+        # The core OCR detection + recognition remains enabled.
+        # -------------------------------------------------
 
         self.ocr = PaddleOCR(
             lang="en",
             device="cpu",
             enable_mkldnn=False,
+
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
         )
 
         print("========================================")
@@ -73,8 +91,9 @@ class OCRService:
         image_path: str
     ):
 
-        # Initialize PaddleOCR only when an actual
-        # image-analysis request is received.
+        # -------------------------------------------------
+        # Initialize OCR only when an image is analyzed.
+        # -------------------------------------------------
 
         ocr = self._get_ocr()
 
@@ -82,6 +101,10 @@ class OCRService:
             "[PADDLEOCR] Processing:",
             image_path
         )
+
+        # -------------------------------------------------
+        # RUN OCR
+        # -------------------------------------------------
 
         result = ocr.predict(image_path)
 
@@ -95,13 +118,13 @@ class OCRService:
 
             data = res.json
 
-            # PaddleOCR may return:
+            # PaddleOCR can return:
             #
             # {
             #     "res": {...}
             # }
             #
-            # or directly the result dictionary.
+            # or the result dictionary directly.
 
             if isinstance(data, dict):
 
@@ -116,15 +139,27 @@ class OCRService:
             ):
                 continue
 
+            # -------------------------------------------------
+            # EXTRACT TEXT
+            # -------------------------------------------------
+
             texts = data.get(
                 "rec_texts",
                 []
             )
 
+            # -------------------------------------------------
+            # EXTRACT CONFIDENCE
+            # -------------------------------------------------
+
             scores = data.get(
                 "rec_scores",
                 []
             )
+
+            # -------------------------------------------------
+            # EXTRACT BOUNDING BOXES
+            # -------------------------------------------------
 
             boxes = data.get(
                 "rec_boxes",
@@ -132,7 +167,7 @@ class OCRService:
             )
 
             # =================================================
-            # PROCESS EACH DETECTED TEXT
+            # PROCESS EACH DETECTED TEXT BLOCK
             # =================================================
 
             for i, text in enumerate(texts):
@@ -187,7 +222,7 @@ class OCRService:
                         bbox = current_box
 
                 # ---------------------------------------------
-                # TEXT
+                # TEXT NORMALIZATION
                 # ---------------------------------------------
 
                 if text is None:
@@ -207,6 +242,10 @@ class OCRService:
                     }
                 )
 
+        # =================================================
+        # LOG RESULT
+        # =================================================
+
         print(
             "[PADDLEOCR] OCR text blocks:",
             len(ocr_results)
@@ -223,7 +262,7 @@ class OCRService:
 #
 # PaddleOCR is NOT initialized here.
 #
-# The actual PaddleOCR model is created only when
+# The actual PaddleOCR engine is created only when
 # extract_text() is called.
 
 ocr_service = OCRService()
