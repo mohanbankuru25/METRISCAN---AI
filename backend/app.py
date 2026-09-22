@@ -1,5 +1,6 @@
 import os
 import gradio as gr
+import spaces
 
 from main import app as fastapi_app
 from app.api.ocr import process_ocr
@@ -24,9 +25,10 @@ class GradioUploadFile:
 
 
 # =========================================================
-# PRODUCT ANALYSIS
+# METRISCAN ANALYSIS
 # =========================================================
 
+@spaces.GPU
 async def analyze_product(image):
 
     if image is None:
@@ -67,7 +69,7 @@ async def analyze_product(image):
 
 
 # =========================================================
-# GRADIO INTERFACE
+# GRADIO UI
 # =========================================================
 
 demo = gr.Interface(
@@ -103,18 +105,19 @@ app = gr.mount_gradio_app(
 
 
 # =========================================================
-# HUGGING FACE STARTUP
+# STARTUP
 # =========================================================
 
 if __name__ == "__main__":
 
     print("========================================")
     print("[METRISCAN] Starting Hugging Face app...")
-    print("[METRISCAN] FastAPI + Gradio")
+    print("[METRISCAN] FastAPI + Gradio + ZeroGPU")
     print("========================================")
 
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        show_error=True
+        show_error=True,
+        ssr_mode=False
     )
