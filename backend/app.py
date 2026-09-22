@@ -5,6 +5,10 @@ from main import app as fastapi_app
 from app.api.ocr import process_ocr
 
 
+# =========================================================
+# GRADIO UPLOAD FILE ADAPTER
+# =========================================================
+
 class GradioUploadFile:
 
     def __init__(self, file_path):
@@ -19,6 +23,10 @@ class GradioUploadFile:
         pass
 
 
+# =========================================================
+# PRODUCT ANALYSIS
+# =========================================================
+
 async def analyze_product(image):
 
     if image is None:
@@ -28,9 +36,10 @@ async def analyze_product(image):
         }
 
     try:
+
         print("========================================")
-        print("Image received:", image)
-        print("Starting MetriScan analysis...")
+        print("[METRISCAN] Image received:", image)
+        print("[METRISCAN] Starting analysis...")
         print("========================================")
 
         upload_file = GradioUploadFile(image)
@@ -38,7 +47,7 @@ async def analyze_product(image):
         result = await process_ocr(upload_file)
 
         print("========================================")
-        print("MetriScan analysis completed.")
+        print("[METRISCAN] Analysis completed.")
         print("========================================")
 
         return result
@@ -56,6 +65,10 @@ async def analyze_product(image):
             "message": str(e)
         }
 
+
+# =========================================================
+# GRADIO INTERFACE
+# =========================================================
 
 demo = gr.Interface(
     fn=analyze_product,
@@ -78,8 +91,30 @@ demo = gr.Interface(
 )
 
 
+# =========================================================
+# MOUNT GRADIO INTO FASTAPI
+# =========================================================
+
 app = gr.mount_gradio_app(
     fastapi_app,
     demo,
     path="/"
 )
+
+
+# =========================================================
+# HUGGING FACE STARTUP
+# =========================================================
+
+if __name__ == "__main__":
+
+    print("========================================")
+    print("[METRISCAN] Starting Hugging Face app...")
+    print("[METRISCAN] FastAPI + Gradio")
+    print("========================================")
+
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        show_error=True
+    )
