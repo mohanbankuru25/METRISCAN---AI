@@ -27,10 +27,10 @@ class OCRService:
 
         # -------------------------------------------------
         # IMPORTANT:
-        # Do NOT initialize PaddleOCR here.
+        # PaddleOCR is NOT initialized during import.
         #
-        # PaddleOCR is heavy and downloads/loads models.
-        # Lazy initialization keeps startup lightweight.
+        # The OCR engine is created only when an image
+        # actually needs to be processed.
         # -------------------------------------------------
 
         self.ocr = None
@@ -49,21 +49,26 @@ class OCRService:
         print("[PADDLEOCR] Initializing OCR engine...")
         print("[PADDLEOCR] Device: CPU")
         print("[PADDLEOCR] Low-memory mode: ENABLED")
+        print("[PADDLEOCR] Lightweight OCR models: ENABLED")
         print("========================================")
 
         # -------------------------------------------------
-        # MEMORY-OPTIMIZED PADDLEOCR
+        # LIGHTWEIGHT PADDLEOCR CONFIGURATION
         # -------------------------------------------------
         #
-        # Disable:
+        # Disabled models:
         #
         # 1. Document orientation classification
         # 2. Document unwarping
         # 3. Text-line orientation classification
         #
-        # These additional models consume RAM.
+        # Lightweight models:
         #
-        # The core OCR detection + recognition remains enabled.
+        # PP-OCRv5_mobile_det
+        # PP-OCRv5_mobile_rec
+        #
+        # These are preferred for a memory-limited
+        # Railway CPU environment.
         # -------------------------------------------------
 
         self.ocr = PaddleOCR(
@@ -71,9 +76,14 @@ class OCRService:
             device="cpu",
             enable_mkldnn=False,
 
+            # Disable additional models
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
+
+            # Lightweight OCR models
+            text_detection_model_name="PP-OCRv5_mobile_det",
+            text_recognition_model_name="PP-OCRv5_mobile_rec",
         )
 
         print("========================================")
