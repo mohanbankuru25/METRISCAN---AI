@@ -1330,7 +1330,7 @@ The API layer connects the React frontend with the Metriscan-AI backend processi
 The working Metriscan-AI application can be accessed using the link below.
 
 **Live Demo:**  
-[Open Metriscan-AI](metriscan-ai-omega.vercel.app)
+[Open Metriscan-AI](https://metriscan-ai-omega.vercel.app/)
 
 The live application demonstrates the Inspector, Admin, and Consumer workflows, including product scanning, AI-assisted extraction, compliance evaluation, and inspection reporting.
 
