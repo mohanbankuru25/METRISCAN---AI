@@ -1,8 +1,8 @@
-# Metriscan-AI
+# Metriscan
 
 ## AI-Powered Packaged Commodity Compliance Inspection System
 
-Metriscan-AI is an AI-powered software system designed to assist Legal Metrology Inspectors in checking the compliance of packaged commodities with the applicable requirements of the Legal Metrology (Packaged Commodities) Rules, 2011.
+Metriscan is an AI-powered software system designed to assist Legal Metrology Inspectors in checking the compliance of packaged commodities with the applicable requirements of the Legal Metrology (Packaged Commodities) Rules, 2011.
 
 The system uses image processing, Optical Character Recognition (OCR), Vision AI, and a rule-based compliance engine to extract package declarations, identify applicable requirements, evaluate compliance, and generate evidence-based inspection reports.
 
@@ -20,7 +20,7 @@ Packaged commodity inspections traditionally require Inspectors to manually exam
 
 Manual verification can be time-consuming and repetitive.
 
-Metriscan-AI provides an AI-assisted digital workflow to support Inspectors during these inspections.
+Metriscan provides an AI-assisted digital workflow to support Inspectors during these inspections.
 
 ## Key Objective
 
@@ -39,7 +39,7 @@ To provide an AI-assisted platform that can:
 
 ### Inspector Module
 
-The Inspector is the primary user of Metriscan-AI.
+The Inspector is the primary user of Metriscan.
 
 - Secure Inspector login
 - Upload or scan packaged-product images
@@ -89,10 +89,10 @@ The Consumer module is an additional public-awareness feature.
 
 ## System Architecture
 
-Metriscan-AI follows a modular architecture where the Inspector, Admin, and Consumer modules interact with the backend services, AI/OCR pipeline, compliance engine, and Supabase database.
+Metriscan follows a modular architecture where the Inspector, Admin, and Consumer modules interact with the backend services, AI/OCR pipeline, compliance engine, and Supabase database.
 
 
-                      METRISCAN-AI
+                      METRISCAN
                            |
           +----------------+----------------+
           |                |                |
@@ -230,13 +230,13 @@ A standardized PDF report is generated containing the inspection findings and fi
 
 ### 10. Human-in-the-Loop Verification
 
-Metriscan-AI is an Inspector-assistance system.
+Metriscan is an Inspector-assistance system.
 
 The AI assists with information extraction and compliance checking, while the Inspector remains responsible for final verification and determination in uncertain cases.
 
 ## Database and Supabase Structure
 
-Metriscan-AI uses Supabase as the centralized backend data platform for authentication, PostgreSQL database storage, file storage, inspection history, compliance rules, and generated reports.
+Metriscan uses Supabase as the centralized backend data platform for authentication, PostgreSQL database storage, file storage, inspection history, compliance rules, and generated reports.
 
 ### Supabase Components
 
@@ -362,7 +362,7 @@ This relationship ensures that the inspection report is generated from the corre
 
 ### Role-Based Access
 
-Metriscan-AI separates access according to user roles.
+Metriscan separates access according to user roles.
 
 **Admin**
 
@@ -391,7 +391,7 @@ The Admin manages the system and compliance configuration, while the Inspector p
 
 ## Security and Access Control
 
-Metriscan-AI uses role-based access control to ensure that each user can access only the functionality relevant to their role.
+Metriscan uses role-based access control to ensure that each user can access only the functionality relevant to their role.
 
 ### Authentication
 
@@ -450,7 +450,7 @@ This provides traceability for inspection records, rule management, and administ
 
 ## End-to-End Workflow
 
-Metriscan-AI follows a complete digital workflow from product image capture to compliance verification and report generation.
+Metriscan follows a complete digital workflow from product image capture to compliance verification and report generation.
 
 ### Inspector Workflow
 
@@ -574,7 +574,7 @@ The Inspector reviews the generated findings and performs the final verification
 
 ## Compliance and Rule Engine
 
-Metriscan-AI uses a rule-based compliance engine to evaluate the extracted package information against the applicable Legal Metrology compliance requirements.
+Metriscan uses a rule-based compliance engine to evaluate the extracted package information against the applicable Legal Metrology compliance requirements.
 
 ### Rule Applicability
 
@@ -672,7 +672,7 @@ The Inspector can then examine the product label and supporting evidence before 
 
 ## OCR, Regex and Vision AI
 
-Metriscan-AI uses a hybrid information extraction approach that combines OCR, Regex-based extraction, and Vision AI.
+Metriscan uses a hybrid information extraction approach that combines OCR, Regex-based extraction, and Vision AI.
 
 ### PaddleOCR
 
@@ -757,13 +757,13 @@ AI and OCR can produce incorrect or incomplete results when labels contain:
 - Partially visible declarations
 - Complex package layouts
 
-Metriscan-AI therefore uses validation and human-in-the-loop review.
+Metriscan therefore uses validation and human-in-the-loop review.
 
 When the available information is not sufficiently reliable, the system can produce a **REVIEW** result for Inspector verification.
 
 ## Inspection Reports and Evidence
 
-Metriscan-AI generates a standardized inspection report based on the current product inspection.
+Metriscan generates a standardized inspection report based on the current product inspection.
 
 ### Inspection Report
 
@@ -1040,7 +1040,7 @@ The Inspector remains the primary user responsible for packaged commodity compli
 
 ## Challenges and Limitations
 
-Metriscan-AI is designed as an AI-assisted inspection system. Like any image-based AI system, its performance can be affected by the quality and availability of the product label information.
+Metriscan is designed as an AI-assisted inspection system. Like any image-based AI system, its performance can be affected by the quality and availability of the product label information.
 
 ### Image Quality
 
@@ -1088,7 +1088,7 @@ The Admin can update the configured compliance rules through the system so that 
 
 ### Human-in-the-Loop
 
-Metriscan-AI does not replace the Legal Metrology Inspector.
+Metriscan does not replace the Legal Metrology Inspector.
 
 The system assists with:
 
@@ -1114,7 +1114,7 @@ Field-level extraction accuracy, compliance evaluation accuracy, and performance
 
 ## Future Enhancements
 
-Metriscan-AI can be extended with additional capabilities to improve inspection coverage, usability, scalability, and automation.
+Metriscan can be extended with additional capabilities to improve inspection coverage, usability, scalability, and automation.
 
 ### Multilingual Label Support
 
@@ -1179,7 +1179,7 @@ Future versions can provide confidence indicators and more detailed review workf
 
 ## Project Benefits and Impact
 
-Metriscan-AI is designed to support digital, consistent, and evidence-based packaged commodity inspections.
+Metriscan is designed to support digital, consistent, and evidence-based packaged commodity inspections.
 
 ### Benefits for Inspectors
 
@@ -1330,7 +1330,7 @@ The API layer connects the React frontend with the Metriscan-AI backend processi
 The working Metriscan-AI application can be accessed using the link below.
 
 **Live Demo:**  
-[Open Metriscan-AI](https://metriscan-ai-omega.vercel.app/)
+[Open Metriscan](https://metriscan-ai-omega.vercel.app/)
 
 The live application demonstrates the Inspector, Admin, and Consumer workflows, including product scanning, AI-assisted extraction, compliance evaluation, and inspection reporting.
 
@@ -1339,4 +1339,4 @@ The live application demonstrates the Inspector, Admin, and Consumer workflows, 
 A complete demonstration of the Metriscan-AI system is available in the video below.
 
 **YouTube Video:**  
-[Watch Metriscan-AI Demonstration](YOUR_YOUTUBE_LINK)
+[Watch Metriscan Demonstration](YOUR_YOUTUBE_LINK)
